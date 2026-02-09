@@ -5,8 +5,12 @@ zephyr_include_directories(include)
 if(CONFIG_ZMK_TEMPLATE_FEATURE)
     # target_sources(app PRIVATE ...)
 
+    if(CONFIG_ZMK_BEHAVIOR_RUNTIME_SENSOR_ROTATE)
+        target_sources(app PRIVATE src/behaviors/behavior_runtime_sensor_rotate.c)
+    endif()
+
     if(CONFIG_ZMK_TEMPLATE_FEATURE_STUDIO_RPC)
-        file(GLOB_RECURSE C_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
+        file(GLOB_RECURSE C_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/studio/*.c)
         target_sources(app PRIVATE ${C_FILES})
 
         list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)

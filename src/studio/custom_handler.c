@@ -9,6 +9,8 @@
 #include <pb_encode.h>
 #include <zmk/studio/custom.h>
 #include <zmk/template/custom.pb.h>
+#include <zmk/behaviors/runtime_sensor_rotate.h>
+#include <zmk/behavior.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -36,6 +38,12 @@ ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(zmk__template, zmk_template_Response);
 
 static int handle_sample_request(const zmk_template_SampleRequest *req,
                                  zmk_template_Response *resp);
+static int handle_get_layer_bindings(const zmk_template_GetLayerBindingsRequest *req,
+                                     zmk_template_Response *resp);
+static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest *req,
+                                     zmk_template_Response *resp);
+static int handle_get_all_layer_bindings(const zmk_template_GetAllLayerBindingsRequest *req,
+                                         zmk_template_Response *resp);
 
 /**
  * Main request handler for the custom RPC subsystem.
@@ -65,6 +73,15 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
     case zmk_template_Request_sample_tag:
         rc = handle_sample_request(&req.request_type.sample, resp);
         break;
+    case zmk_template_Request_get_layer_bindings_tag:
+        rc = handle_get_layer_bindings(&req.request_type.get_layer_bindings, resp);
+        break;
+    case zmk_template_Request_set_layer_bindings_tag:
+        rc = handle_set_layer_bindings(&req.request_type.set_layer_bindings, resp);
+        break;
+    case zmk_template_Request_get_all_layer_bindings_tag:
+        rc = handle_get_all_layer_bindings(&req.request_type.get_all_layer_bindings, resp);
+        break;
     default:
         LOG_WRN("Unsupported template request type: %d", req.which_request_type);
         rc = -1;
@@ -93,5 +110,98 @@ static int handle_sample_request(const zmk_template_SampleRequest *req,
 
     resp->which_response_type = zmk_template_Response_sample_tag;
     resp->response_type.sample = result;
+    return 0;
+}
+
+static int handle_get_layer_bindings(const zmk_template_GetLayerBindingsRequest *req,
+                                     zmk_template_Response *resp) {
+    LOG_DBG("Get layer bindings: sensor=%d layer=%d", req->sensor_index, req->layer);
+
+    struct runtime_sensor_rotate_layer_bindings bindings;
+    int rc = zmk_runtime_sensor_rotate_get_layer_bindings(req->sensor_index, req->layer, &bindings);
+
+    if (rc != 0) {
+        LOG_ERR("Failed to get layer bindings: %d", rc);
+        return rc;
+    }
+
+    zmk_template_GetLayerBindingsResponse result = zmk_template_GetLayerBindingsResponse_init_zero;
+
+    strncpy(result.cw_binding.behavior, bindings.cw_binding.behavior_dev,
+            sizeof(result.cw_binding.behavior) - 1);
+    result.cw_binding.param1 = bindings.cw_binding.param1;
+    result.cw_binding.param2 = bindings.cw_binding.param2;
+
+    strncpy(result.ccw_binding.behavior, bindings.ccw_binding.behavior_dev,
+            sizeof(result.ccw_binding.behavior) - 1);
+    result.ccw_binding.param1 = bindings.ccw_binding.param1;
+    result.ccw_binding.param2 = bindings.ccw_binding.param2;
+
+    resp->which_response_type = zmk_template_Response_get_layer_bindings_tag;
+    resp->response_type.get_layer_bindings = result;
+    return 0;
+}
+
+static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest *req,
+                                     zmk_template_Response *resp) {
+    LOG_DBG("Set layer bindings: sensor=%d layer=%d", req->sensor_index, req->layer);
+
+    struct runtime_sensor_rotate_layer_bindings bindings;
+
+    strncpy(bindings.cw_binding.behavior_dev, req->cw_binding.behavior,
+            sizeof(bindings.cw_binding.behavior_dev) - 1);
+    bindings.cw_binding.param1 = req->cw_binding.param1;
+    bindings.cw_binding.param2 = req->cw_binding.param2;
+
+    strncpy(bindings.ccw_binding.behavior_dev, req->ccw_binding.behavior,
+            sizeof(bindings.ccw_binding.behavior_dev) - 1);
+    bindings.ccw_binding.param1 = req->ccw_binding.param1;
+    bindings.ccw_binding.param2 = req->ccw_binding.param2;
+
+    int rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &bindings);
+
+    zmk_template_SetLayerBindingsResponse result = zmk_template_SetLayerBindingsResponse_init_zero;
+    result.success = (rc == 0);
+
+    resp->which_response_type = zmk_template_Response_set_layer_bindings_tag;
+    resp->response_type.set_layer_bindings = result;
+    return rc;
+}
+
+static int handle_get_all_layer_bindings(const zmk_template_GetAllLayerBindingsRequest *req,
+                                         zmk_template_Response *resp) {
+    LOG_DBG("Get all layer bindings: sensor=%d", req->sensor_index);
+
+    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
+    uint8_t actual_layers;
+
+    int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
+        req->sensor_index, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS, bindings, &actual_layers);
+
+    if (rc != 0) {
+        LOG_ERR("Failed to get all layer bindings: %d", rc);
+        return rc;
+    }
+
+    zmk_template_GetAllLayerBindingsResponse result =
+        zmk_template_GetAllLayerBindingsResponse_init_zero;
+    result.bindings_count = actual_layers;
+
+    for (uint8_t i = 0; i < actual_layers; i++) {
+        result.bindings[i].layer = i;
+
+        strncpy(result.bindings[i].cw_binding.behavior, bindings[i].cw_binding.behavior_dev,
+                sizeof(result.bindings[i].cw_binding.behavior) - 1);
+        result.bindings[i].cw_binding.param1 = bindings[i].cw_binding.param1;
+        result.bindings[i].cw_binding.param2 = bindings[i].cw_binding.param2;
+
+        strncpy(result.bindings[i].ccw_binding.behavior, bindings[i].ccw_binding.behavior_dev,
+                sizeof(result.bindings[i].ccw_binding.behavior) - 1);
+        result.bindings[i].ccw_binding.param1 = bindings[i].ccw_binding.param1;
+        result.bindings[i].ccw_binding.param2 = bindings[i].ccw_binding.param2;
+    }
+
+    resp->which_response_type = zmk_template_Response_get_all_layer_bindings_tag;
+    resp->response_type.get_all_layer_bindings = result;
     return 0;
 }

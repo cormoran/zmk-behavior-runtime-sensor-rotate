@@ -6,8 +6,49 @@ message SampleRequest { int32 value = 1; }
 
 message SampleResponse { string value = 1; }
 
+// Runtime sensor rotate messages
+message Binding {
+    string behavior = 1;
+    uint32 param1 = 2;
+    uint32 param2 = 3;
+}
+
+message GetLayerBindingsRequest {
+    uint32 sensor_index = 1;
+    uint32 layer = 2;
+}
+
+message GetLayerBindingsResponse {
+    Binding cw_binding = 1;
+    Binding ccw_binding = 2;
+}
+
+message SetLayerBindingsRequest {
+    uint32 sensor_index = 1;
+    uint32 layer = 2;
+    Binding cw_binding = 3;
+    Binding ccw_binding = 4;
+}
+
+message SetLayerBindingsResponse { bool success = 1; }
+
+message GetAllLayerBindingsRequest { uint32 sensor_index = 1; }
+
+message LayerBindings {
+    uint32 layer = 1;
+    Binding cw_binding = 2;
+    Binding ccw_binding = 3;
+}
+
+message GetAllLayerBindingsResponse { repeated LayerBindings bindings = 1; }
+
 message Request {
-    oneof request_type { SampleRequest sample = 1; }
+    oneof request_type {
+        SampleRequest sample = 1;
+        GetLayerBindingsRequest get_layer_bindings = 2;
+        SetLayerBindingsRequest set_layer_bindings = 3;
+        GetAllLayerBindingsRequest get_all_layer_bindings = 4;
+    }
 }
 
 message ErrorResponse { string message = 1; }
@@ -16,5 +57,8 @@ message Response {
     oneof response_type {
         ErrorResponse error = 1;
         SampleResponse sample = 2;
+        GetLayerBindingsResponse get_layer_bindings = 3;
+        SetLayerBindingsResponse set_layer_bindings = 4;
+        GetAllLayerBindingsResponse get_all_layer_bindings = 5;
     }
 }

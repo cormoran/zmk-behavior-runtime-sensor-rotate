@@ -3,3 +3,5 @@
 
 zmk.template.SampleResponse.value    max_size:64
 zmk.template.ErrorResponse.message   max_size:64
+zmk.template.Binding.behavior        max_size:32
+zmk.template.GetAllLayerBindingsResponse.bindings max_count:8
