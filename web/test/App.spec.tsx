@@ -27,8 +27,12 @@ describe("App Component", () => {
       render(<App />);
 
       // Check for the main title
-      expect(screen.getByText(/ZMK Module Template/i)).toBeInTheDocument();
-      expect(screen.getByText(/Custom Studio RPC Demo/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/ZMK Runtime Sensor Rotate/i)
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Configure sensor rotation bindings via ZMK Studio/i)
+      ).toBeInTheDocument();
     });
 
     it("should render connection button when disconnected", () => {
@@ -42,7 +46,9 @@ describe("App Component", () => {
       render(<App />);
 
       // Check for footer text
-      expect(screen.getByText(/Template Module/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Runtime Sensor Rotate Module/i)
+      ).toBeInTheDocument();
     });
   });
 

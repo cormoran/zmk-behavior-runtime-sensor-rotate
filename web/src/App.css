@@ -157,9 +157,11 @@
 
 .input-group label {
   font-weight: 500;
+  min-width: 100px;
 }
 
-.input-group input {
+.input-group input,
+.input-group select {
   padding: 0.5rem 1rem;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -188,6 +190,44 @@
   border-radius: 4px;
   font-family: monospace;
   overflow-x: auto;
+}
+
+/* Runtime Sensor Rotate specific styles */
+.layer-config {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.layer-config h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.binding-editor {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.binding-editor h4 {
+  margin-top: 0;
+  color: #333;
+}
+
+.binding-group {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.binding-group h5 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #555;
 }
 
 .app-footer {
@@ -262,7 +302,8 @@
     color: #fff;
   }
 
-  .input-group input {
+  .input-group input,
+  .input-group select {
     background: #333;
     border-color: #555;
     color: #fff;
@@ -276,6 +317,31 @@
   .response-box pre {
     background: #2d2d2d;
     color: #fff;
+  }
+
+  .layer-config {
+    border-top-color: #444;
+  }
+
+  .layer-config h3 {
+    color: #fff;
+  }
+
+  .binding-editor {
+    background: #333;
+  }
+
+  .binding-editor h4 {
+    color: #fff;
+  }
+
+  .binding-group {
+    background: #2d2d2d;
+    border-color: #555;
+  }
+
+  .binding-group h5 {
+    color: #ccc;
   }
 
   .app-footer {

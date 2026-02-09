@@ -12,6 +12,7 @@ import {
   ZMKAppContext,
 } from "@cormoran/zmk-studio-react-hook";
 import { Request, Response } from "./proto/zmk/template/custom";
+import { RuntimeSensorRotateConfig } from "./RuntimeSensorRotateConfig";
 
 // Custom subsystem identifier - must match firmware registration
 export const SUBSYSTEM_IDENTIFIER = "zmk__template";
@@ -20,8 +21,8 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 ZMK Module Template</h1>
-        <p>Custom Studio RPC Demo</p>
+        <h1>🔧 ZMK Runtime Sensor Rotate</h1>
+        <p>Configure sensor rotation bindings via ZMK Studio</p>
       </header>
 
       <ZMKConnection
@@ -56,6 +57,8 @@ function App() {
               </button>
             </section>
 
+            <RuntimeSensorRotateConfig />
+
             <RPCTestSection />
           </>
         )}
@@ -63,7 +66,8 @@ function App() {
 
       <footer className="app-footer">
         <p>
-          <strong>Template Module</strong> - Customize this for your ZMK module
+          <strong>Runtime Sensor Rotate Module</strong> - Configure sensor
+          bindings per layer
         </p>
       </footer>
     </div>
