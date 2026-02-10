@@ -104,7 +104,14 @@ static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingReque
                                        cormoran_rsr_Response *resp) {
     LOG_DBG("Set layer CW binding: sensor=%d layer=%d", req->sensor_index, req->layer);
 
-    // Get current bindings first - we need to preserve the CCW binding
+    // Validate layer bounds
+    if (req->layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+        LOG_ERR("Layer %d exceeds max layers %d", req->layer, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS);
+        return -EINVAL;
+    }
+
+    // Get current bindings - we retrieve all layers since the API doesn't support
+    // getting a single layer. We need to preserve the CCW binding when updating CW.
     struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
     uint8_t actual_layers;
     int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
@@ -137,7 +144,14 @@ static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingReq
                                         cormoran_rsr_Response *resp) {
     LOG_DBG("Set layer CCW binding: sensor=%d layer=%d", req->sensor_index, req->layer);
 
-    // Get current bindings first - we need to preserve the CW binding
+    // Validate layer bounds
+    if (req->layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+        LOG_ERR("Layer %d exceeds max layers %d", req->layer, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS);
+        return -EINVAL;
+    }
+
+    // Get current bindings - we retrieve all layers since the API doesn't support
+    // getting a single layer. We need to preserve the CW binding when updating CCW.
     struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
     uint8_t actual_layers;
     int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
