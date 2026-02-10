@@ -43,20 +43,34 @@ static struct behavior_runtime_sensor_rotate_data global_data = {};
 static int settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg) {
     const char *next;
     int rc;
+    int sensor_index, layer;
 
-    if (settings_name_steq(name, "bindings", &next) && !next) {
-        if (len != sizeof(global_data.bindings)) {
-            LOG_ERR("Invalid settings data size: %d vs %d", len, sizeof(global_data.bindings));
+    // Parse key format: s<sensor_index>/l<layer>
+    // Example: "s0/l1" for sensor 0, layer 1
+    if (sscanf(name, "s%d/l%d", &sensor_index, &layer) == 2) {
+        if (sensor_index < 0 || sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
+            LOG_WRN("Invalid sensor index in settings: %d", sensor_index);
+            return -EINVAL;
+        }
+        if (layer < 0 || layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+            LOG_WRN("Invalid layer in settings: %d", layer);
             return -EINVAL;
         }
 
-        rc = read_cb(cb_arg, &global_data.bindings, sizeof(global_data.bindings));
+        if (len != sizeof(struct runtime_sensor_rotate_layer_bindings)) {
+            LOG_ERR("Invalid settings data size for s%d/l%d: %d vs %d", sensor_index, layer, len,
+                    sizeof(struct runtime_sensor_rotate_layer_bindings));
+            return -EINVAL;
+        }
+
+        rc = read_cb(cb_arg, &global_data.bindings[sensor_index][layer],
+                     sizeof(struct runtime_sensor_rotate_layer_bindings));
         if (rc < 0) {
-            LOG_ERR("Failed to read settings: %d", rc);
+            LOG_ERR("Failed to read settings for s%d/l%d: %d", sensor_index, layer, rc);
             return rc;
         }
 
-        LOG_INF("Loaded runtime sensor rotate bindings from settings");
+        LOG_DBG("Loaded bindings for sensor %d layer %d", sensor_index, layer);
         return 0;
     }
 
@@ -93,11 +107,14 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
 
     global_data.bindings[sensor_index][layer] = *bindings;
 
-    // Save to settings
-    int rc = settings_save_one(SETTINGS_KEY "/bindings", &global_data.bindings,
-                               sizeof(global_data.bindings));
+    // Save to settings with per-sensor, per-layer key
+    char key[32];
+    snprintf(key, sizeof(key), SETTINGS_KEY "/s%d/l%d", sensor_index, layer);
+
+    int rc = settings_save_one(key, &global_data.bindings[sensor_index][layer],
+                               sizeof(struct runtime_sensor_rotate_layer_bindings));
     if (rc != 0) {
-        LOG_ERR("Failed to save settings: %d", rc);
+        LOG_ERR("Failed to save settings for sensor %d layer %d: %d", sensor_index, layer, rc);
         return rc;
     }
 
