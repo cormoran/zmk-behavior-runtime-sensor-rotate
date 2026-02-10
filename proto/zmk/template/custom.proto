@@ -1,12 +1,13 @@
 syntax = "proto3";
 
-package zmk.template;
+package cormoran.rsr;
 
 // Runtime sensor rotate messages
 message Binding {
     uint32 behavior_id = 1;
     uint32 param1 = 2;
     uint32 param2 = 3;
+    uint32 tap_ms = 4;
 }
 
 message SetLayerBindingsRequest {

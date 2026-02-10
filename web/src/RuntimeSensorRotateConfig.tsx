@@ -309,24 +309,28 @@ function LayerBindingEditor({
   );
   const [cwParam1, setCwParam1] = useState(bindings.cwBinding?.param1 || 0);
   const [cwParam2, setCwParam2] = useState(bindings.cwBinding?.param2 || 0);
+  const [cwTapMs, setCwTapMs] = useState(bindings.cwBinding?.tapMs || 100);
 
   const [ccwBehaviorId, setCcwBehaviorId] = useState(
     bindings.ccwBinding?.behaviorId || 0
   );
   const [ccwParam1, setCcwParam1] = useState(bindings.ccwBinding?.param1 || 0);
   const [ccwParam2, setCcwParam2] = useState(bindings.ccwBinding?.param2 || 0);
+  const [ccwTapMs, setCcwTapMs] = useState(bindings.ccwBinding?.tapMs || 100);
 
   const handleSave = () => {
     const cwBinding: Binding = {
       behaviorId: cwBehaviorId,
       param1: cwParam1,
       param2: cwParam2,
+      tapMs: cwTapMs,
     };
 
     const ccwBinding: Binding = {
       behaviorId: ccwBehaviorId,
       param1: ccwParam1,
       param2: ccwParam2,
+      tapMs: ccwTapMs,
     };
 
     onSave(layer, cwBinding, ccwBinding);
@@ -375,6 +379,14 @@ function LayerBindingEditor({
             onChange={(e) => setCwParam2(parseInt(e.target.value) || 0)}
           />
         </div>
+        <div className="input-group">
+          <label>Tap MS:</label>
+          <input
+            type="number"
+            value={cwTapMs}
+            onChange={(e) => setCwTapMs(parseInt(e.target.value) || 100)}
+          />
+        </div>
       </div>
 
       <div className="binding-group">
@@ -410,6 +422,14 @@ function LayerBindingEditor({
             type="number"
             value={ccwParam2}
             onChange={(e) => setCcwParam2(parseInt(e.target.value) || 0)}
+          />
+        </div>
+        <div className="input-group">
+          <label>Tap MS:</label>
+          <input
+            type="number"
+            value={ccwTapMs}
+            onChange={(e) => setCcwTapMs(parseInt(e.target.value) || 100)}
           />
         </div>
       </div>

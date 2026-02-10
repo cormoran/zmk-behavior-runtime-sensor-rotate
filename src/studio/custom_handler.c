@@ -100,28 +100,16 @@ static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest 
 
     struct runtime_sensor_rotate_layer_bindings bindings;
 
-    // Convert behavior_id to behavior_dev name
-    const char *cw_behavior_name =
-        zmk_behavior_find_behavior_name_from_local_id(req->cw_binding.behavior_id);
-    const char *ccw_behavior_name =
-        zmk_behavior_find_behavior_name_from_local_id(req->ccw_binding.behavior_id);
-    if (req->has_cw_binding && !cw_behavior_name) {
-        LOG_ERR("Unknown CW behavior ID: %d", req->cw_binding.behavior_id);
-        return -EINVAL;
-    }
-    if (req->has_ccw_binding && !ccw_behavior_name) {
-        LOG_ERR("Unknown CCW behavior ID: %d", req->ccw_binding.behavior_id);
-        return -EINVAL;
-    }
-
-    // Set behavior_dev pointers (not copying strings)
-    bindings.cw_binding.behavior_dev = cw_behavior_name;
+    // Convert behavior_id to local_id
+    bindings.cw_binding.behavior_local_id = req->cw_binding.behavior_id;
     bindings.cw_binding.param1 = req->cw_binding.param1;
     bindings.cw_binding.param2 = req->cw_binding.param2;
+    bindings.cw_binding.tap_ms = req->cw_binding.tap_ms;
 
-    bindings.ccw_binding.behavior_dev = ccw_behavior_name;
+    bindings.ccw_binding.behavior_local_id = req->ccw_binding.behavior_id;
     bindings.ccw_binding.param1 = req->ccw_binding.param1;
     bindings.ccw_binding.param2 = req->ccw_binding.param2;
+    bindings.ccw_binding.tap_ms = req->ccw_binding.tap_ms;
 
     int rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &bindings);
 
@@ -155,18 +143,16 @@ static int handle_get_all_layer_bindings(const zmk_template_GetAllLayerBindingsR
     for (uint8_t i = 0; i < actual_layers; i++) {
         result.bindings[i].layer = i;
 
-        // Convert behavior_dev name to behavior_id
-        result.bindings[i].has_cw_binding = true;
-        result.bindings[i].cw_binding.behavior_id =
-            zmk_behavior_get_local_id(bindings[i].cw_binding.behavior_dev);
+        // Convert local_id to behavior_id (they are the same)
+        result.bindings[i].cw_binding.behavior_id = bindings[i].cw_binding.behavior_local_id;
         result.bindings[i].cw_binding.param1 = bindings[i].cw_binding.param1;
         result.bindings[i].cw_binding.param2 = bindings[i].cw_binding.param2;
+        result.bindings[i].cw_binding.tap_ms = bindings[i].cw_binding.tap_ms;
 
-        result.bindings[i].has_ccw_binding = true;
-        result.bindings[i].ccw_binding.behavior_id =
-            zmk_behavior_get_local_id(bindings[i].ccw_binding.behavior_dev);
+        result.bindings[i].ccw_binding.behavior_id = bindings[i].ccw_binding.behavior_local_id;
         result.bindings[i].ccw_binding.param1 = bindings[i].ccw_binding.param1;
         result.bindings[i].ccw_binding.param2 = bindings[i].ccw_binding.param2;
+        result.bindings[i].ccw_binding.tap_ms = bindings[i].ccw_binding.tap_ms;
     }
 
     resp->which_response_type = zmk_template_Response_get_all_layer_bindings_tag;

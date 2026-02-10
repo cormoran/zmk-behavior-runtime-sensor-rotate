@@ -101,8 +101,8 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
         return rc;
     }
 
-    LOG_DBG("Saved bindings %s for sensor %d layer %d", bindings->cw_binding.behavior_dev,
-            sensor_index, layer);
+    LOG_DBG("Saved bindings (local_id=%d) for sensor %d layer %d",
+            bindings->cw_binding.behavior_local_id, sensor_index, layer);
     return 0;
 }
 
@@ -214,31 +214,64 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
 
-    struct zmk_behavior_binding triggered_binding;
+    struct runtime_sensor_rotate_binding triggered_binding_data;
     if (triggers > 0) {
-        triggered_binding = global_data.bindings[sensor_index][event.layer].cw_binding;
+        triggered_binding_data = global_data.bindings[sensor_index][event.layer].cw_binding;
     } else if (triggers < 0) {
         triggers = -triggers;
-        triggered_binding = global_data.bindings[sensor_index][event.layer].ccw_binding;
+        triggered_binding_data = global_data.bindings[sensor_index][event.layer].ccw_binding;
     } else {
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
 
     // Check if binding is configured
-    if (triggered_binding.behavior_dev == NULL || strlen(triggered_binding.behavior_dev) == 0) {
+    if (triggered_binding_data.behavior_local_id == 0) {
         LOG_DBG("No binding configured for sensor %d layer %d", sensor_index, event.layer);
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
 
-    LOG_DBG("Runtime sensor binding: %s (triggers=%d)", triggered_binding.behavior_dev, triggers);
+    // Get behavior name from local_id
+    const char *behavior_name =
+        zmk_behavior_find_behavior_name_from_local_id(triggered_binding_data.behavior_local_id);
+    if (!behavior_name) {
+        LOG_ERR("Failed to find behavior for local_id %d",
+                triggered_binding_data.behavior_local_id);
+        return ZMK_BEHAVIOR_TRANSPARENT;
+    }
+
+    // Create the zmk_behavior_binding for execution
+    struct zmk_behavior_binding triggered_binding = {
+#if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_LOCAL_IDS_IN_BINDINGS)
+        .local_id = triggered_binding_data.behavior_local_id,
+#endif
+        .behavior_dev = behavior_name,
+        .param1 = triggered_binding_data.param1,
+        .param2 = triggered_binding_data.param2,
+    };
+
+    // Check if the behavior is transparent
+    const struct device *behavior_dev = zmk_behavior_get_binding(triggered_binding.behavior_dev);
+    if (!behavior_dev) {
+        LOG_ERR("Behavior device not found: %s", triggered_binding.behavior_dev);
+        return ZMK_BEHAVIOR_TRANSPARENT;
+    }
+
+    LOG_DBG("Runtime sensor binding: %s (triggers=%d, tap_ms=%d)", triggered_binding.behavior_dev,
+            triggers, triggered_binding_data.tap_ms);
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT)
     event.source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL;
 #endif
 
     for (int i = 0; i < triggers; i++) {
-        zmk_behavior_queue_add(&event, triggered_binding, true, cfg->tap_ms);
-        zmk_behavior_queue_add(&event, triggered_binding, false, 0);
+        int press_ret =
+            zmk_behavior_queue_add(&event, triggered_binding, true, triggered_binding_data.tap_ms);
+        int release_ret = zmk_behavior_queue_add(&event, triggered_binding, false, 0);
+
+        // If either press or release returns transparent, treat the whole binding as transparent
+        if (press_ret == ZMK_BEHAVIOR_TRANSPARENT || release_ret == ZMK_BEHAVIOR_TRANSPARENT) {
+            return ZMK_BEHAVIOR_TRANSPARENT;
+        }
     }
 
     return ZMK_BEHAVIOR_OPAQUE;

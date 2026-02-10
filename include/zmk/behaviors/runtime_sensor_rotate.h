@@ -13,9 +13,16 @@
 #define ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS ZMK_KEYMAP_LAYERS_LEN
 #define ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS ZMK_KEYMAP_SENSORS_LEN
 
+struct runtime_sensor_rotate_binding {
+    zmk_behavior_local_id_t behavior_local_id;
+    uint32_t param1;
+    uint32_t param2;
+    uint32_t tap_ms;
+};
+
 struct runtime_sensor_rotate_layer_bindings {
-    struct zmk_behavior_binding cw_binding;
-    struct zmk_behavior_binding ccw_binding;
+    struct runtime_sensor_rotate_binding cw_binding;
+    struct runtime_sensor_rotate_binding ccw_binding;
 };
 
 /**
