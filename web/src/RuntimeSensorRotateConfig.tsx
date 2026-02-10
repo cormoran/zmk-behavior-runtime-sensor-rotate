@@ -20,7 +20,6 @@ import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-clie
 
 export const SUBSYSTEM_IDENTIFIER = "zmk__template";
 
-
 export function RuntimeSensorRotateConfig() {
   const zmkApp = useContext(ZMKAppContext);
   const [sensors, setSensors] = useState<SensorInfo[]>([]);
@@ -32,7 +31,10 @@ export function RuntimeSensorRotateConfig() {
   const [error, setError] = useState<string | null>(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const subsystem = useMemo(() => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER), [zmkApp?.state.customSubsystems]);
+  const subsystem = useMemo(
+    () => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER),
+    [zmkApp?.state.customSubsystems]
+  );
 
   // Load available sensors
   useEffect(() => {
@@ -75,29 +77,31 @@ export function RuntimeSensorRotateConfig() {
 
       const conn = zmkApp.state.connection;
 
-        const res = await call_rpc(conn, {
-            behaviors: {
-                listAllBehaviors: true
-            }
-        });
-        if (res.meta) {
-            setIsLoading(false);
-            setError(`Error: ${res.meta}`);
-            return;
-        }
-        const behaviorIds = res.behaviors?.listAllBehaviors?.behaviors ?? [];
-        const behaviors = await Promise.all(behaviorIds.map(async (b) => {
-            const res = await call_rpc(conn, {
-                behaviors: {
-                    getBehaviorDetails: {
-                        behaviorId: b
-                    }
-                }
-            })
-            return res.behaviors?.getBehaviorDetails;
-        }));
-        setBehaviors(behaviors.filter((b) => b !== undefined));
+      const res = await call_rpc(conn, {
+        behaviors: {
+          listAllBehaviors: true,
+        },
+      });
+      if (res && res.meta) {
         setIsLoading(false);
+        setError(`Error: ${res.meta}`);
+        return;
+      }
+      const behaviorIds = res?.behaviors?.listAllBehaviors?.behaviors ?? [];
+      const behaviors = await Promise.all(
+        behaviorIds.map(async (b) => {
+          const detailRes = await call_rpc(conn, {
+            behaviors: {
+              getBehaviorDetails: {
+                behaviorId: b,
+              },
+            },
+          });
+          return detailRes?.behaviors?.getBehaviorDetails;
+        })
+      );
+      setBehaviors(behaviors.filter((b) => b !== undefined));
+      setIsLoading(false);
     };
 
     loadBehaviors();
@@ -146,53 +150,52 @@ export function RuntimeSensorRotateConfig() {
   }, [zmkApp, subsystem, sensorIndex]);
 
   // Save bindings for a specific layer
-  const saveLayerBindings = useCallback(async (
-    layer: number,
-    cwBinding: Binding,
-    ccwBinding: Binding
-  ) => {
-    if (!zmkApp.state.connection || !subsystem) return;
+  const saveLayerBindings = useCallback(
+    async (layer: number, cwBinding: Binding, ccwBinding: Binding) => {
+      if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
 
-    setIsLoading(true);
-    setError(null);
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const service = new ZMKCustomSubsystem(
-        zmkApp.state.connection,
-        subsystem.index
-      );
+      try {
+        const service = new ZMKCustomSubsystem(
+          zmkApp.state.connection,
+          subsystem.index
+        );
 
-      const request = Request.create({
-        setLayerBindings: {
-          sensorIndex: sensorIndex,
-          layer: layer,
-          cwBinding: cwBinding,
-          ccwBinding: ccwBinding,
-        },
-      });
+        const request = Request.create({
+          setLayerBindings: {
+            sensorIndex: sensorIndex,
+            layer: layer,
+            cwBinding: cwBinding,
+            ccwBinding: ccwBinding,
+          },
+        });
 
-      const payload = Request.encode(request).finish();
-      const responsePayload = await service.callRPC(payload);
+        const payload = Request.encode(request).finish();
+        const responsePayload = await service.callRPC(payload);
 
-      if (responsePayload) {
-        const resp = Response.decode(responsePayload);
+        if (responsePayload) {
+          const resp = Response.decode(responsePayload);
 
-        if (resp.setLayerBindings?.success) {
-          // Reload bindings to show updated values
-          await loadAllLayerBindings();
-        } else if (resp.error) {
-          setError(`Error: ${resp.error.message}`);
+          if (resp.setLayerBindings?.success) {
+            // Reload bindings to show updated values
+            await loadAllLayerBindings();
+          } else if (resp.error) {
+            setError(`Error: ${resp.error.message}`);
+          }
         }
+      } catch (err) {
+        console.error("Failed to save layer bindings:", err);
+        setError(
+          `Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`
+        );
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to save layer bindings:", err);
-      setError(
-        `Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]);
+    },
+    [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+  );
 
   if (!zmkApp) return null;
 
@@ -301,32 +304,38 @@ function LayerBindingEditor({
   onSave,
   isLoading,
 }: LayerBindingEditorProps) {
-  const [cwBehavior, setCwBehavior] = useState(
-    bindings.cwBinding?.behavior || ""
+  const [cwBehaviorId, setCwBehaviorId] = useState(
+    bindings.cwBinding?.behaviorId || 0
   );
   const [cwParam1, setCwParam1] = useState(bindings.cwBinding?.param1 || 0);
   const [cwParam2, setCwParam2] = useState(bindings.cwBinding?.param2 || 0);
 
-  const [ccwBehavior, setCcwBehavior] = useState(
-    bindings.ccwBinding?.behavior || ""
+  const [ccwBehaviorId, setCcwBehaviorId] = useState(
+    bindings.ccwBinding?.behaviorId || 0
   );
   const [ccwParam1, setCcwParam1] = useState(bindings.ccwBinding?.param1 || 0);
   const [ccwParam2, setCcwParam2] = useState(bindings.ccwBinding?.param2 || 0);
 
   const handleSave = () => {
     const cwBinding: Binding = {
-      behavior: cwBehavior,
+      behaviorId: cwBehaviorId,
       param1: cwParam1,
       param2: cwParam2,
     };
 
     const ccwBinding: Binding = {
-      behavior: ccwBehavior,
+      behaviorId: ccwBehaviorId,
       param1: ccwParam1,
       param2: ccwParam2,
     };
 
     onSave(layer, cwBinding, ccwBinding);
+  };
+
+  // Helper to get behavior name from ID
+  const getBehaviorName = (id: number) => {
+    const behavior = behaviors.find((b) => b?.id === id);
+    return behavior?.displayName || `Behavior ${id}`;
   };
 
   return (
@@ -337,13 +346,18 @@ function LayerBindingEditor({
         <h5>↻ Clockwise Rotation</h5>
         <div className="input-group">
           <label>Behavior:</label>
-          <input
-            type="text"
-            value={cwBehavior}
-            onChange={(e) => setCwBehavior(e.target.value)}
-            placeholder="e.g., kp"
-            list="behaviors-list"
-          />
+          <select
+            value={cwBehaviorId}
+            onChange={(e) => setCwBehaviorId(parseInt(e.target.value))}
+          >
+            <option value={0}>None</option>
+            {behaviors.map((b) => (
+              <option key={b?.id} value={b?.id || 0}>
+                {b?.displayName || `Behavior ${b?.id}`}
+              </option>
+            ))}
+          </select>
+          <span className="behavior-name">{getBehaviorName(cwBehaviorId)}</span>
         </div>
         <div className="input-group">
           <label>Param 1:</label>
@@ -367,13 +381,20 @@ function LayerBindingEditor({
         <h5>↺ Counter-Clockwise Rotation</h5>
         <div className="input-group">
           <label>Behavior:</label>
-          <input
-            type="text"
-            value={ccwBehavior}
-            onChange={(e) => setCcwBehavior(e.target.value)}
-            placeholder="e.g., kp"
-            list="behaviors-list"
-          />
+          <select
+            value={ccwBehaviorId}
+            onChange={(e) => setCcwBehaviorId(parseInt(e.target.value))}
+          >
+            <option value={0}>None</option>
+            {behaviors.map((b) => (
+              <option key={b?.id} value={b?.id || 0}>
+                {b?.displayName || `Behavior ${b?.id}`}
+              </option>
+            ))}
+          </select>
+          <span className="behavior-name">
+            {getBehaviorName(ccwBehaviorId)}
+          </span>
         </div>
         <div className="input-group">
           <label>Param 1:</label>
@@ -392,14 +413,6 @@ function LayerBindingEditor({
           />
         </div>
       </div>
-
-      <datalist id="behaviors-list">
-        {behaviors.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.displayName}
-            </option>
-        ))}
-      </datalist>
 
       <button
         className="btn btn-primary"

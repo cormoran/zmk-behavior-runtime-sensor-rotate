@@ -1,16 +1,17 @@
-config ZMK_TEMPLATE_FEATURE
-    bool "Enable template feature"
+config ZMK_RUNTIME_SENSOR_ROTATE
+    bool "Enable runtime sensor rotate feature"
 
-if ZMK_TEMPLATE_FEATURE
+if ZMK_RUNTIME_SENSOR_ROTATE
 
-config ZMK_TEMPLATE_FEATURE_STUDIO_RPC
-    bool "Enable template feature custom Studio RPC"
+config ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
+    bool "Enable runtime sensor rotate custom Studio RPC"
+    default y
     depends on ZMK_STUDIO
 
 config ZMK_BEHAVIOR_RUNTIME_SENSOR_ROTATE
     bool "Enable runtime configurable sensor rotate behavior"
     default y
-    depends on ZMK_TEMPLATE_FEATURE_STUDIO_RPC
+    depends on ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
     help
       Enable runtime configurable sensor rotate behavior that can be
       configured via ZMK Studio RPC protocol.
