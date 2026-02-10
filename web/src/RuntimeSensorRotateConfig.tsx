@@ -38,24 +38,9 @@ export function RuntimeSensorRotateConfig() {
     const loadBehaviors = async () => {
       if (!zmkApp?.state.connection) return;
 
-      try {
-        // Use default behavior list (extendable later with actual RPC call)
-        const behaviorList: BehaviorInfo[] = [
-          { id: 0, name: "kp" },
-          { id: 1, name: "mo" },
-          { id: 2, name: "to" },
-          { id: 3, name: "none" },
-        ];
-        setBehaviors(behaviorList);
-      } catch (err) {
-        console.error("Failed to load behaviors:", err);
-        setBehaviors([
-          { id: 0, name: "kp" },
-          { id: 1, name: "mo" },
-          { id: 2, name: "to" },
-          { id: 3, name: "none" },
-        ]);
-      }
+      // Behaviors list will be empty by default
+      // Users can manually type behavior names in the UI
+      setBehaviors([]);
     };
 
     loadBehaviors();

@@ -8,9 +8,10 @@
 
 #include <zmk/behavior.h>
 #include <zmk/keymap.h>
+#include <zmk/sensors.h>
 
-#define ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS 8
-#define ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS 2
+#define ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS ZMK_KEYMAP_LAYERS_LEN
+#define ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS ZMK_KEYMAP_SENSORS_LEN
 
 struct runtime_sensor_rotate_layer_bindings {
     struct zmk_behavior_binding cw_binding;

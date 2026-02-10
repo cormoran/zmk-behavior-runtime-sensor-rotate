@@ -2,10 +2,6 @@ syntax = "proto3";
 
 package zmk.template;
 
-message SampleRequest { int32 value = 1; }
-
-message SampleResponse { string value = 1; }
-
 // Runtime sensor rotate messages
 message Binding {
     string behavior = 1;
@@ -44,10 +40,9 @@ message GetAllLayerBindingsResponse { repeated LayerBindings bindings = 1; }
 
 message Request {
     oneof request_type {
-        SampleRequest sample = 1;
-        GetLayerBindingsRequest get_layer_bindings = 2;
-        SetLayerBindingsRequest set_layer_bindings = 3;
-        GetAllLayerBindingsRequest get_all_layer_bindings = 4;
+        GetLayerBindingsRequest get_layer_bindings = 1;
+        SetLayerBindingsRequest set_layer_bindings = 2;
+        GetAllLayerBindingsRequest get_all_layer_bindings = 3;
     }
 }
 
@@ -56,9 +51,8 @@ message ErrorResponse { string message = 1; }
 message Response {
     oneof response_type {
         ErrorResponse error = 1;
-        SampleResponse sample = 2;
-        GetLayerBindingsResponse get_layer_bindings = 3;
-        SetLayerBindingsResponse set_layer_bindings = 4;
-        GetAllLayerBindingsResponse get_all_layer_bindings = 5;
+        GetLayerBindingsResponse get_layer_bindings = 2;
+        SetLayerBindingsResponse set_layer_bindings = 3;
+        GetAllLayerBindingsResponse get_all_layer_bindings = 4;
     }
 }

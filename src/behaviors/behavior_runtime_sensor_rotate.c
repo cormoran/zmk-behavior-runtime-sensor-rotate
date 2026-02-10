@@ -25,7 +25,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct behavior_runtime_sensor_rotate_config {
     int tap_ms;
-    uint8_t max_layers;
 };
 
 struct behavior_runtime_sensor_rotate_data {
@@ -39,7 +38,7 @@ struct behavior_runtime_sensor_rotate_data {
 static struct behavior_runtime_sensor_rotate_data global_data = {0};
 
 // Settings storage key
-#define SETTINGS_KEY "runtime_sr"
+#define SETTINGS_KEY "rsr"
 
 static int settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg) {
     const char *next;
@@ -281,7 +280,6 @@ static int behavior_runtime_sensor_rotate_init(const struct device *dev) {
     static struct behavior_runtime_sensor_rotate_config                                            \
         behavior_runtime_sensor_rotate_config_##n = {                                              \
             .tap_ms = DT_INST_PROP_OR(n, tap_ms, 5),                                               \
-            .max_layers = DT_INST_PROP_OR(n, layers, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS),        \
     };                                                                                             \
     BEHAVIOR_DT_INST_DEFINE(n, behavior_runtime_sensor_rotate_init, NULL, &global_data,            \
                             &behavior_runtime_sensor_rotate_config_##n, POST_KERNEL,               \

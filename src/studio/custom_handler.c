@@ -36,8 +36,6 @@ ZMK_RPC_CUSTOM_SUBSYSTEM(zmk__template, &template_feature_meta, template_rpc_han
 
 ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(zmk__template, zmk_template_Response);
 
-static int handle_sample_request(const zmk_template_SampleRequest *req,
-                                 zmk_template_Response *resp);
 static int handle_get_layer_bindings(const zmk_template_GetLayerBindingsRequest *req,
                                      zmk_template_Response *resp);
 static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest *req,
@@ -70,9 +68,6 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
 
     int rc = 0;
     switch (req.which_request_type) {
-    case zmk_template_Request_sample_tag:
-        rc = handle_sample_request(&req.request_type.sample, resp);
-        break;
     case zmk_template_Request_get_layer_bindings_tag:
         rc = handle_get_layer_bindings(&req.request_type.get_layer_bindings, resp);
         break;
@@ -94,23 +89,6 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
         resp->response_type.error = err;
     }
     return true;
-}
-
-/**
- * Handle the SampleRequest and populate the response.
- */
-static int handle_sample_request(const zmk_template_SampleRequest *req,
-                                 zmk_template_Response *resp) {
-    LOG_DBG("Received sample request with value: %d", req->value);
-
-    zmk_template_SampleResponse result = zmk_template_SampleResponse_init_zero;
-
-    // Create a simple response string based on the request value
-    snprintf(result.value, sizeof(result.value), "Hello from firmware! Received: %d", req->value);
-
-    resp->which_response_type = zmk_template_Response_sample_tag;
-    resp->response_type.sample = result;
-    return 0;
 }
 
 static int handle_get_layer_bindings(const zmk_template_GetLayerBindingsRequest *req,

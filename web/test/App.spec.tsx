@@ -92,8 +92,10 @@ describe("App Component", () => {
       // Verify disconnect button is now available
       expect(screen.getByText(/Disconnect/i)).toBeInTheDocument();
 
-      // Verify RPC test section is visible
-      expect(screen.getByText(/RPC Test/i)).toBeInTheDocument();
+      // Verify runtime sensor rotate configuration section is visible
+      expect(
+        screen.getByText(/Runtime Sensor Rotate Configuration/i)
+      ).toBeInTheDocument();
     });
   });
 });
