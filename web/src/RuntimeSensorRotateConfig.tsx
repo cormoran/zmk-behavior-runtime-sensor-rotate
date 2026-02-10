@@ -18,7 +18,7 @@ import {
 import { call_rpc } from "@zmkfirmware/zmk-studio-ts-client";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 
-export const SUBSYSTEM_IDENTIFIER = "zmk__template";
+export const SUBSYSTEM_IDENTIFIER = "cormoran_rsr";
 
 export function RuntimeSensorRotateConfig() {
   const zmkApp = useContext(ZMKAppContext);

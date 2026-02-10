@@ -88,7 +88,7 @@ import { useZMKApp, ZMKCustomSubsystem } from "@cormoran/zmk-studio-react-hook";
 const { state, connect, findSubsystem, isConnected } = useZMKApp();
 
 // Find your subsystem
-const subsystem = findSubsystem("zmk__template");
+const subsystem = findSubsystem("cormoran_rsr");
 
 // Create service and make RPC calls
 const service = new ZMKCustomSubsystem(state.connection, subsystem.index);
@@ -133,7 +133,7 @@ import {
 // Create a mock connected device with subsystems
 const mockZMKApp = createConnectedMockZMKApp({
   deviceName: "Test Device",
-  subsystems: ["zmk__template"],
+  subsystems: ["cormoran_rsr"],
 });
 
 // Wrap your component with the provider

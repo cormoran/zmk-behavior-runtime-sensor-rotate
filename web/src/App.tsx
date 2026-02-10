@@ -9,7 +9,7 @@ import { ZMKConnection } from "@cormoran/zmk-studio-react-hook";
 import { RuntimeSensorRotateConfig } from "./RuntimeSensorRotateConfig";
 
 // Custom subsystem identifier - must match firmware registration
-export const SUBSYSTEM_IDENTIFIER = "zmk__template";
+export const SUBSYSTEM_IDENTIFIER = "cormoran_rsr";
 
 function App() {
   return (

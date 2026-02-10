@@ -35,9 +35,9 @@ static struct zmk_rpc_custom_subsystem_meta template_feature_meta = {
  * The first argument is the subsystem name used to route requests from the
  * frontend. Format: <namespace>__<feature> (double underscore)
  */
-ZMK_RPC_CUSTOM_SUBSYSTEM(zmk__template, &template_feature_meta, template_rpc_handle_request);
+ZMK_RPC_CUSTOM_SUBSYSTEM(cormoran_rsr, &template_feature_meta, template_rpc_handle_request);
 
-ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(zmk__template, cormoran_rsr_Response);
+ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(cormoran_rsr, cormoran_rsr_Response);
 
 static int handle_set_layer_bindings(const cormoran_rsr_SetLayerBindingsRequest *req,
                                      cormoran_rsr_Response *resp);
@@ -53,7 +53,7 @@ static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
 static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
                                         pb_callback_t *encode_response) {
     cormoran_rsr_Response *resp =
-        ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER_ALLOCATE(zmk__template, encode_response);
+        ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER_ALLOCATE(cormoran_rsr, encode_response);
 
     cormoran_rsr_Request req = cormoran_rsr_Request_init_zero;
 
