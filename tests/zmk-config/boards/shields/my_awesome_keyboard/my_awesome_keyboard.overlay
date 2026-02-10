@@ -66,12 +66,42 @@
 			compatible = "zmk,behavior-runtime-sensor-rotate";
 			#sensor-binding-cells = <0>;
 			tap-ms = <5>;
+			
+			// Default binding for sensor 0, layer 0 (default layer)
+			default_layer0 {
+				sensor-index = <0>;
+				layer-mask = <0x01>;// bit 0 = layer 0
+				cw-binding-behavior = "kp";
+				cw-binding-param1 = <C_VOL_UP>;
+				ccw-binding-behavior = "kp";
+				ccw-binding-param1 = <C_VOL_DN>;
+			};
+			
+			// Default binding for sensor 0, layer 1 (next layer)
+			next_layer0 {
+				sensor-index = <0>;
+				layer-mask = <0x02>;// bit 1 = layer 1
+				cw-binding-behavior = "kp";
+				cw-binding-param1 = <C_BRI_UP>;
+				ccw-binding-behavior = "kp";
+				ccw-binding-param1 = <C_BRI_DN>;
+			};
 		};
 		
 		sensor_rsr_right: sensor_rsr_right {
 			compatible = "zmk,behavior-runtime-sensor-rotate";
 			#sensor-binding-cells = <0>;
 			tap-ms = <10>;
+			
+			// Default binding for sensor 1, layers 0 and 1
+			default_both_layers {
+				sensor-index = <1>;
+				layer-mask = <0x03>;// bits 0-1 = layers 0-1
+				cw-binding-behavior = "kp";
+				cw-binding-param1 = <PG_UP>;
+				ccw-binding-behavior = "kp";
+				ccw-binding-param1 = <PG_DN>;
+			};
 		};
 	};
 };
