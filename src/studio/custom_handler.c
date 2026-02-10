@@ -111,7 +111,9 @@ static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest 
     bindings.ccw_binding.param2 = req->ccw_binding.param2;
 
     int rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &bindings);
-
+    if (rc != 0) {
+        LOG_ERR("Failed to set layer bindings: %d", rc);
+    }
     zmk_template_SetLayerBindingsResponse result = zmk_template_SetLayerBindingsResponse_init_zero;
     result.success = (rc == 0);
 
@@ -144,11 +146,13 @@ static int handle_get_all_layer_bindings(const zmk_template_GetAllLayerBindingsR
 
         strncpy(result.bindings[i].cw_binding.behavior, bindings[i].cw_binding.behavior_dev,
                 sizeof(result.bindings[i].cw_binding.behavior) - 1);
+        result.bindings[i].has_cw_binding = true;
         result.bindings[i].cw_binding.param1 = bindings[i].cw_binding.param1;
         result.bindings[i].cw_binding.param2 = bindings[i].cw_binding.param2;
 
         strncpy(result.bindings[i].ccw_binding.behavior, bindings[i].ccw_binding.behavior_dev,
                 sizeof(result.bindings[i].ccw_binding.behavior) - 1);
+        result.bindings[i].has_ccw_binding = true;
         result.bindings[i].ccw_binding.param1 = bindings[i].ccw_binding.param1;
         result.bindings[i].ccw_binding.param2 = bindings[i].ccw_binding.param2;
     }

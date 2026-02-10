@@ -3,7 +3,7 @@
  * Provides UI for configuring sensor rotation bindings per layer
  */
 
-import { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect, useCallback, useMemo } from "react";
 import {
   ZMKAppContext,
   ZMKCustomSubsystem,
@@ -15,13 +15,11 @@ import {
   LayerBindings,
   SensorInfo,
 } from "./proto/zmk/template/custom";
+import { call_rpc } from "@zmkfirmware/zmk-studio-ts-client";
+import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 
 export const SUBSYSTEM_IDENTIFIER = "zmk__template";
 
-interface BehaviorInfo {
-  id: number;
-  name: string;
-}
 
 export function RuntimeSensorRotateConfig() {
   const zmkApp = useContext(ZMKAppContext);
@@ -29,17 +27,17 @@ export function RuntimeSensorRotateConfig() {
   const [sensorIndex, setSensorIndex] = useState<number>(0);
   const [selectedLayer, setSelectedLayer] = useState<number>(0);
   const [allLayerBindings, setAllLayerBindings] = useState<LayerBindings[]>([]);
-  const [behaviors, setBehaviors] = useState<BehaviorInfo[]>([]);
+  const [behaviors, setBehaviors] = useState<GetBehaviorDetailsResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const subsystem = zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const subsystem = useMemo(() => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER), [zmkApp?.state.customSubsystems]);
 
   // Load available sensors
   useEffect(() => {
     const loadSensors = async () => {
       if (!zmkApp?.state.connection || !subsystem) return;
-
       try {
         const service = new ZMKCustomSubsystem(
           zmkApp.state.connection,
@@ -72,20 +70,43 @@ export function RuntimeSensorRotateConfig() {
   useEffect(() => {
     const loadBehaviors = async () => {
       if (!zmkApp?.state.connection) return;
+      setIsLoading(true);
+      setError(null);
 
-      // Behaviors list will be empty by default
-      // Users can manually type behavior names in the UI
-      setBehaviors([]);
+      const conn = zmkApp.state.connection;
+
+        const res = await call_rpc(conn, {
+            behaviors: {
+                listAllBehaviors: true
+            }
+        });
+        if (res.meta) {
+            setIsLoading(false);
+            setError(`Error: ${res.meta}`);
+            return;
+        }
+        const behaviorIds = res.behaviors?.listAllBehaviors?.behaviors ?? [];
+        const behaviors = await Promise.all(behaviorIds.map(async (b) => {
+            const res = await call_rpc(conn, {
+                behaviors: {
+                    getBehaviorDetails: {
+                        behaviorId: b
+                    }
+                }
+            })
+            return res.behaviors?.getBehaviorDetails;
+        }));
+        setBehaviors(behaviors.filter((b) => b !== undefined));
+        setIsLoading(false);
     };
 
     loadBehaviors();
   }, [zmkApp?.state.connection]);
 
-  if (!zmkApp) return null;
-
   // Load all layer bindings for the selected sensor
-  const loadAllLayerBindings = async () => {
-    if (!zmkApp.state.connection || !subsystem) return;
+  const loadAllLayerBindings = useCallback(async () => {
+    if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
+    console.log("Loading layer bindings for sensor index:", sensorIndex);
 
     setIsLoading(true);
     setError(null);
@@ -107,7 +128,7 @@ export function RuntimeSensorRotateConfig() {
 
       if (responsePayload) {
         const resp = Response.decode(responsePayload);
-
+        console.log("Received layer bindings response:", resp);
         if (resp.getAllLayerBindings) {
           setAllLayerBindings(resp.getAllLayerBindings.bindings || []);
         } else if (resp.error) {
@@ -122,10 +143,10 @@ export function RuntimeSensorRotateConfig() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [zmkApp, subsystem, sensorIndex]);
 
   // Save bindings for a specific layer
-  const saveLayerBindings = async (
+  const saveLayerBindings = useCallback(async (
     layer: number,
     cwBinding: Binding,
     ccwBinding: Binding
@@ -171,7 +192,9 @@ export function RuntimeSensorRotateConfig() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]);
+
+  if (!zmkApp) return null;
 
   if (!subsystem) {
     return (
@@ -266,7 +289,7 @@ export function RuntimeSensorRotateConfig() {
 interface LayerBindingEditorProps {
   layer: number;
   bindings: LayerBindings;
-  behaviors: BehaviorInfo[];
+  behaviors: GetBehaviorDetailsResponse[];
   onSave: (layer: number, cwBinding: Binding, ccwBinding: Binding) => void;
   isLoading: boolean;
 }
@@ -372,7 +395,9 @@ function LayerBindingEditor({
 
       <datalist id="behaviors-list">
         {behaviors.map((b) => (
-          <option key={b.id} value={b.name} />
+          <option key={b.id} value={b.id}>
+            {b.displayName}
+            </option>
         ))}
       </datalist>
 

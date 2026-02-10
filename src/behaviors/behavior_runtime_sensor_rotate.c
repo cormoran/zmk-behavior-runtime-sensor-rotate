@@ -63,10 +63,8 @@ static int settings_set(const char *name, size_t len, settings_read_cb read_cb, 
     return -ENOENT;
 }
 
-static struct settings_handler settings_handler = {
-    .name = SETTINGS_KEY,
-    .h_set = settings_set,
-};
+SETTINGS_STATIC_HANDLER_DEFINE(behavior_runtime_sensor_rotate, SETTINGS_KEY, NULL, settings_set,
+                               NULL, NULL);
 
 int zmk_runtime_sensor_rotate_get_layer_bindings(
     uint8_t sensor_index, uint8_t layer, struct runtime_sensor_rotate_layer_bindings *bindings) {
@@ -103,7 +101,8 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
         return rc;
     }
 
-    LOG_DBG("Saved bindings for sensor %d layer %d", sensor_index, layer);
+    LOG_DBG("Saved bindings %s for sensor %d layer %d", bindings->cw_binding.behavior_dev,
+            sensor_index, layer);
     return 0;
 }
 
@@ -249,32 +248,7 @@ static const struct behavior_driver_api behavior_runtime_sensor_rotate_driver_ap
     .sensor_binding_accept_data = behavior_runtime_sensor_rotate_accept_data,
     .sensor_binding_process = behavior_runtime_sensor_rotate_process};
 
-static int behavior_runtime_sensor_rotate_init(const struct device *dev) {
-    // Register settings handler on first init
-    static bool settings_registered = false;
-    if (!settings_registered) {
-        int rc = settings_subsys_init();
-        if (rc != 0) {
-            LOG_ERR("Failed to init settings subsystem: %d", rc);
-        }
-
-        rc = settings_register(&settings_handler);
-        if (rc != 0) {
-            LOG_ERR("Failed to register settings handler: %d", rc);
-            return rc;
-        }
-
-        rc = settings_load();
-        if (rc != 0) {
-            LOG_WRN("Failed to load settings: %d", rc);
-        }
-
-        settings_registered = true;
-        LOG_INF("Runtime sensor rotate settings registered");
-    }
-
-    return 0;
-}
+static int behavior_runtime_sensor_rotate_init(const struct device *dev) { return 0; }
 
 #define RUNTIME_SENSOR_ROTATE_INST(n)                                                              \
     static struct behavior_runtime_sensor_rotate_config                                            \

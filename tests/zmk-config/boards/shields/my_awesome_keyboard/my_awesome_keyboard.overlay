@@ -3,8 +3,9 @@
 *
 * SPDX-License-Identifier: MIT
 */
-#include <dt-bindings/zmk/matrix_transform.h>
 #include "my_awesome_keyboard-layouts.dtsi"
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/matrix_transform.h>
 
 &physical_layout0 {
 	transform = <&transform0>;
@@ -15,7 +16,7 @@
 		zmk,kscan = &kscan0;
 		zmk,physical-layout = &physical_layout0;
 	};
-
+	
 	kscan0: kscan {
 		compatible = "zmk,kscan-gpio-direct";
 		input-gpios
@@ -25,20 +26,40 @@
 		, <&xiao_d 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 		, <&xiao_d 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 		, <&xiao_d 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-		, <&xiao_d 6 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-		, <&xiao_d 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 		, <&xiao_d 8 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 		, <&xiao_d 9 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 		, <&xiao_d 10 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 		;
 	};
-
+	
 	transform0: keymap_transform {
 		compatible = "zmk,matrix-transform";
-		columns = <11>;
+		columns = <9>;
 		rows = <1>;
 		map = <
-		RC(0,0)  RC(0,1)  RC(0,2)  RC(0,3)  RC(0,4)  RC(0,5)  RC(0,6)  RC(0,7)  RC(0,8)  RC(0,9)  RC(0,10)
+		RC(0,0)  RC(0,1)  RC(0,2)  RC(0,3)  RC(0,4)  RC(0,5)  RC(0,6)  RC(0,7)  RC(0,8)
 		>;
+	};
+	
+	left_encoder: encoder_left {
+		compatible = "alps,ec11";
+		a-gpios = <&xiao_d 6 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		b-gpios = <&xiao_d 7 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		resolution = <24>;
+		status = "okay";
+	};
+	
+	sensors: sensors {
+		compatible = "zmk,keymap-sensors";
+		sensors = <&left_encoder>;
+		triggers-per-rotation = <10>;
+	};
+	
+	behaviors {
+		sensor_rotate_runtime: sensor_rotate_runtime {
+			compatible = "zmk,behavior-runtime-sensor-rotate";
+			#sensor-binding-cells = <0>;
+			tap-ms = <5>;
+		};
 	};
 };
