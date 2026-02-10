@@ -35,7 +35,7 @@ struct behavior_runtime_sensor_rotate_data {
     bool data_accepted[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS][ZMK_KEYMAP_LAYERS_LEN];
 };
 
-static struct behavior_runtime_sensor_rotate_data global_data = {0};
+static struct behavior_runtime_sensor_rotate_data global_data = {};
 
 // Settings storage key
 #define SETTINGS_KEY "rsr"
