@@ -10,7 +10,7 @@
 / {
 	keymap {
 		compatible = "zmk,keymap";
-
+		
 		default_layer {
 			bindings = <
 			&kp N0
@@ -22,9 +22,8 @@
 			&kp N6
 			&kp N7
 			&kp N8
-			&kp N9
-			&kp ENTER
 			>;
+			sensor-bindings = <&sensor_rotate_runtime>;
 		};
 	};
 };

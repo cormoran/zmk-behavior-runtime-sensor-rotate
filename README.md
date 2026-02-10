@@ -1,78 +1,194 @@
-# ZMK Module Template with Custom Web UI
+# ZMK Runtime Sensor Rotate Module
 
-This repository contains a template for a ZMK module with Web UI by using
-**unofficial** custom studio rpc protocol.
+This ZMK module provides a runtime-configurable sensor rotation behavior with web UI support.
+It allows you to configure sensor rotation bindings per layer via ZMK Studio's custom RPC protocol,
+with persistent storage.
 
-Basic usage is the same to official template. Read through the
-[ZMK Module Creation](https://zmk.dev/docs/development/module-creation) page for
-details on how to configure this template.
+## Features
 
-### Supporting custom studio RPC protocol
+- **Runtime Configuration**: Configure sensor rotation bindings without reflashing firmware
+- **Per-Layer Bindings**: Different bindings for each keyboard layer
+- **Persistent Storage**: Configuration is saved and restored across reboots
+- **Web UI**: Easy-to-use web interface for configuration
+- **Deduplication**: Prevents duplicate trigger processing when the same behavior instance is used across layers
 
-This template contains sample implementation. Please edit and rename below files
-to implement your protocol.
+## Setup
 
-- proto `proto/zmk/template/custom.proto` and `custom.options`
-- handler `src/studio/custom_handler.c`
-- flags in `Kconfig`
-- test `./tests/studio`
+### 1. Add dependency to your `config/west.yml`
 
-### Implementing Web UI for the custom protocol
+```yaml
+manifest:
+  remotes:
+    ...
+    - name: cormoran
+      url-base: https://github.com/cormoran
+  projects:
+    ...
+    - name: zmk-behavior-runtime-sensor-rotate
+      remote: cormoran
+      revision: main # or latest commit hash
+    # Required: Use ZMK with custom studio protocol support
+    - name: zmk
+      remote: cormoran
+      revision: v0.3+custom-studio-protocol
+      import:
+        file: app/west.yml
+```
 
-`./web` contains boilerplate based on
-[vite template `react-ts`](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts)
-(`npm create vite@latest web -- --template react-ts`) and react hook library
-[@cormoran/react-zmk-studio](https://github.com/cormoran/react-zmk-studio).
+### 2. Enable in your `config/<shield>.conf`
 
-Please refer
-[react-zmk-studio README](https://github.com/cormoran/react-zmk-studio/blob/main/README.md).
+```conf
+# Enable ZMK Studio
+CONFIG_ZMK_STUDIO=y
 
-## Setup (Please edit!)
+# Enable the runtime sensor rotate module
+CONFIG_ZMK_RUNTIME_SENSOR_ROTATE=y
+CONFIG_ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC=y
+CONFIG_ZMK_BEHAVIOR_RUNTIME_SENSOR_ROTATE=y
 
-You can use this zmk-module with below setup.
+# Enable settings storage (if not already enabled)
+CONFIG_SETTINGS=y
+CONFIG_SETTINGS_RUNTIME=y
+```
 
-1. Add dependency to your `config/west.yml`.
+### 3. Add to your keymap
 
-   ```yaml:config/west.yml
-   # Please update with your account and repository name after create repository from template
-   manifest:
-   remotes:
-       ...
-       - name: cormoran
-       url-base: https://github.com/cormoran
-   projects:
-       ...
-       - name: zmk-module-template-with-custom-studio-rpc
-       remote: cormoran
-       revision: main # or latest commit hash
-       # import: true # if this module has other dependencies
-       ...
-       # Below setting required to use unofficial studio custom PRC feature
-       - name: zmk
-       remote: cormoran
-       revision: v0.3+custom-studio-protocol
-       import:
-           file: app/west.yml
+In your `<keyboard>.keymap`, define a runtime sensor rotate behavior instance:
+
+```dts
+/ {
+    behaviors {
+        sensor_rotate_runtime: sensor_rotate_runtime {
+            compatible = "zmk,behavior-runtime-sensor-rotate";
+            #sensor-binding-cells = <0>;
+            tap-ms = <5>;
+            layers = <8>;  // Number of layers to support
+        };
+    };
+};
+```
+
+Then use it in your sensor bindings:
+
+```dts
+&sensors {
+    triggers-per-rotation = <20>;
+};
+
+&left_encoder {
+    bindings = <&sensor_rotate_runtime>;
+};
+```
+
+## Usage
+
+### Web UI Configuration
+
+1. **Build and deploy the Web UI**:
+   ```bash
+   cd web
+   npm install
+   npm run build
    ```
 
-1. Enable flag in your `config/<shield>.conf`
+2. **Connect to your keyboard**:
+   - Open the web UI in your browser
+   - Click "Connect Serial" to connect via USB serial
+   - The web UI will detect the custom subsystem
 
-   ```conf:<shield>.conf
-   # Enable standalone features
-   CONFIG_ZMK_TEMPLATE_FEATURE=y
+3. **Configure bindings**:
+   - Select the sensor index (0 or 1)
+   - Click "Load Configuration" to fetch current bindings
+   - Select the layer you want to configure
+   - Set clockwise and counter-clockwise bindings:
+     - Enter behavior name (e.g., "kp" for key press)
+     - Set param1 and param2 as needed
+   - Click "Save Bindings" to persist the configuration
 
-   # Optionally enable studio custom RPC features
-   CONFIG_ZMK_STUDIO=y
-   CONFIG_ZMK_TEMPLATE_FEATURE_STUDIO_RPC=y
-   ```
+### Example Bindings
 
-1. Update your `<keyboard>.keymap` like .....
+**Volume Control (Layer 0)**:
+- Clockwise: `behavior: "kp"`, `param1: 128` (Volume Up)
+- Counter-clockwise: `behavior: "kp"`, `param1: 129` (Volume Down)
 
-   ```
-   / {
-       ...
-   }
-   ```
+**Layer Switch (Layer 1)**:
+- Clockwise: `behavior: "to"`, `param1: 2` (Switch to layer 2)
+- Counter-clockwise: `behavior: "to"`, `param1: 0` (Switch to layer 0)
+
+## Development
+
+### Repository Structure
+
+```
+.
+├── dts/                    # Device tree bindings
+├── include/                # Public header files
+├── src/
+│   ├── behaviors/         # Behavior implementation
+│   └── studio/            # RPC handlers
+├── proto/                 # Protocol buffer definitions
+└── web/                   # Web UI
+    ├── src/
+    │   ├── RuntimeSensorRotateConfig.tsx  # Main UI component
+    │   └── proto/         # Generated TypeScript types
+    └── test/              # Web UI tests
+```
+
+### Building Firmware
+
+See the main [ZMK documentation](https://zmk.dev/docs) for building firmware with modules.
+
+### Web UI Development
+
+```bash
+cd web
+npm install
+npm run dev      # Start development server
+npm run build    # Build for production
+npm test         # Run tests
+```
+
+## How It Works
+
+### Firmware
+
+1. **Behavior**: The `zmk,behavior-runtime-sensor-rotate` behavior maintains per-layer bindings in memory and storage
+2. **RPC Protocol**: Custom Studio RPC handlers allow the web UI to get/set bindings
+3. **Storage**: Zephyr's settings subsystem persists configuration across reboots
+4. **Deduplication**: A flag prevents processing the same sensor data multiple times when a behavior instance is shared across layers
+
+### Web UI
+
+1. Connects to the keyboard via WebSerial
+2. Calls custom RPC methods to retrieve/update configuration
+3. Provides an intuitive interface for configuring bindings per layer
+
+## Technical Details
+
+### Protobuf Messages
+
+- `GetLayerBindingsRequest/Response`: Get bindings for a specific sensor and layer
+- `SetLayerBindingsRequest/Response`: Set bindings for a specific sensor and layer
+- `GetAllLayerBindingsRequest/Response`: Get bindings for all layers of a sensor
+
+### Storage Format
+
+Bindings are stored in flash using Zephyr's settings subsystem under the key `runtime_sr/bindings`.
+
+### Limitations
+
+- Maximum 2 sensors supported (configurable via `ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS`)
+- Maximum 8 layers supported (configurable via `ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS`)
+- Behavior names are limited to 32 characters
+
+## More Information
+
+This module is based on the [ZMK Module Template with Custom Studio RPC](https://github.com/cormoran/zmk-module-template-with-custom-studio-rpc).
+
+For more information about ZMK modules:
+- [ZMK Module Creation](https://zmk.dev/docs/development/module-creation)
+- [Zephyr Modules](https://docs.zephyrproject.org/latest/develop/modules.html)
+- [react-zmk-studio](https://github.com/cormoran/react-zmk-studio)
 
 ## Development Guide
 
