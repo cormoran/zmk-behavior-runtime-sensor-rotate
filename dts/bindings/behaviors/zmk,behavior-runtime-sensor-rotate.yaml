@@ -17,48 +17,13 @@ properties:
   tap-ms:
     type: int
     default: 5
-
-child-binding:
-  description: Default bindings for specific sensors and layers
-
-  properties:
-    sensor-index:
-      type: int
-      required: true
-      description: Index of the sensor (0-based)
-    layer-mask:
-      type: int
-      required: true
-      description: Bit mask indicating which layers this binding applies to (bit 0 = layer 0, bit 1 = layer 1, etc.)
-    cw-binding-behavior:
-      type: string
-      required: false
-      description: Behavior name for clockwise rotation (e.g., "kp")
-    cw-binding-param1:
-      type: int
-      required: false
-      default: 0
-      description: First parameter for clockwise binding
-    cw-binding-param2:
-      type: int
-      required: false
-      default: 0
-      description: Second parameter for clockwise binding
-    ccw-binding-behavior:
-      type: string
-      required: false
-      description: Behavior name for counter-clockwise rotation (e.g., "kp")
-    ccw-binding-param1:
-      type: int
-      required: false
-      default: 0
-      description: First parameter for counter-clockwise binding
-    ccw-binding-param2:
-      type: int
-      required: false
-      default: 0
-      description: Second parameter for counter-clockwise binding
-    tap-ms:
-      type: int
-      required: false
-      description: Tap duration in milliseconds (overrides parent tap-ms if specified)
+  cw-binding:
+    type: phandle-array
+    required: false
+    specifier-space: binding
+    description: Behavior binding for clockwise rotation (e.g., <&kp C_VOL_UP>)
+  ccw-binding:
+    type: phandle-array
+    required: false
+    specifier-space: binding
+    description: Behavior binding for counter-clockwise rotation (e.g., <&kp C_VOL_DN>)
