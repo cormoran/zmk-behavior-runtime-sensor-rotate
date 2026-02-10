@@ -264,14 +264,8 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
 #endif
 
     for (int i = 0; i < triggers; i++) {
-        int press_ret =
-            zmk_behavior_queue_add(&event, triggered_binding, true, triggered_binding_data.tap_ms);
-        int release_ret = zmk_behavior_queue_add(&event, triggered_binding, false, 0);
-
-        // If either press or release returns transparent, treat the whole binding as transparent
-        if (press_ret == ZMK_BEHAVIOR_TRANSPARENT || release_ret == ZMK_BEHAVIOR_TRANSPARENT) {
-            return ZMK_BEHAVIOR_TRANSPARENT;
-        }
+        zmk_behavior_queue_add(&event, triggered_binding, true, triggered_binding_data.tap_ms);
+        zmk_behavior_queue_add(&event, triggered_binding, false, 0);
     }
 
     return ZMK_BEHAVIOR_OPAQUE;
