@@ -3,4 +3,6 @@
 
 zmk.template.ErrorResponse.message   max_size:64
 zmk.template.Binding.behavior        max_size:32
+zmk.template.SensorInfo.name         max_size:32
 zmk.template.GetAllLayerBindingsResponse.bindings max_count:16
+zmk.template.GetSensorsResponse.sensors max_count:4

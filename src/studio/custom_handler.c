@@ -11,7 +11,10 @@
 #include <zmk/template/custom.pb.h>
 #include <zmk/behaviors/runtime_sensor_rotate.h>
 #include <zmk/behavior.h>
+#include <zmk/sensors.h>
 
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -36,12 +39,12 @@ ZMK_RPC_CUSTOM_SUBSYSTEM(zmk__template, &template_feature_meta, template_rpc_han
 
 ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(zmk__template, zmk_template_Response);
 
-static int handle_get_layer_bindings(const zmk_template_GetLayerBindingsRequest *req,
-                                     zmk_template_Response *resp);
 static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest *req,
                                      zmk_template_Response *resp);
 static int handle_get_all_layer_bindings(const zmk_template_GetAllLayerBindingsRequest *req,
                                          zmk_template_Response *resp);
+static int handle_get_sensors(const zmk_template_GetSensorsRequest *req,
+                              zmk_template_Response *resp);
 
 /**
  * Main request handler for the custom RPC subsystem.
@@ -68,14 +71,14 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
 
     int rc = 0;
     switch (req.which_request_type) {
-    case zmk_template_Request_get_layer_bindings_tag:
-        rc = handle_get_layer_bindings(&req.request_type.get_layer_bindings, resp);
-        break;
     case zmk_template_Request_set_layer_bindings_tag:
         rc = handle_set_layer_bindings(&req.request_type.set_layer_bindings, resp);
         break;
     case zmk_template_Request_get_all_layer_bindings_tag:
         rc = handle_get_all_layer_bindings(&req.request_type.get_all_layer_bindings, resp);
+        break;
+    case zmk_template_Request_get_sensors_tag:
+        rc = handle_get_sensors(&req.request_type.get_sensors, resp);
         break;
     default:
         LOG_WRN("Unsupported template request type: %d", req.which_request_type);
@@ -89,35 +92,6 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
         resp->response_type.error = err;
     }
     return true;
-}
-
-static int handle_get_layer_bindings(const zmk_template_GetLayerBindingsRequest *req,
-                                     zmk_template_Response *resp) {
-    LOG_DBG("Get layer bindings: sensor=%d layer=%d", req->sensor_index, req->layer);
-
-    struct runtime_sensor_rotate_layer_bindings bindings;
-    int rc = zmk_runtime_sensor_rotate_get_layer_bindings(req->sensor_index, req->layer, &bindings);
-
-    if (rc != 0) {
-        LOG_ERR("Failed to get layer bindings: %d", rc);
-        return rc;
-    }
-
-    zmk_template_GetLayerBindingsResponse result = zmk_template_GetLayerBindingsResponse_init_zero;
-
-    strncpy(result.cw_binding.behavior, bindings.cw_binding.behavior_dev,
-            sizeof(result.cw_binding.behavior) - 1);
-    result.cw_binding.param1 = bindings.cw_binding.param1;
-    result.cw_binding.param2 = bindings.cw_binding.param2;
-
-    strncpy(result.ccw_binding.behavior, bindings.ccw_binding.behavior_dev,
-            sizeof(result.ccw_binding.behavior) - 1);
-    result.ccw_binding.param1 = bindings.ccw_binding.param1;
-    result.ccw_binding.param2 = bindings.ccw_binding.param2;
-
-    resp->which_response_type = zmk_template_Response_get_layer_bindings_tag;
-    resp->response_type.get_layer_bindings = result;
-    return 0;
 }
 
 static int handle_set_layer_bindings(const zmk_template_SetLayerBindingsRequest *req,
@@ -181,5 +155,36 @@ static int handle_get_all_layer_bindings(const zmk_template_GetAllLayerBindingsR
 
     resp->which_response_type = zmk_template_Response_get_all_layer_bindings_tag;
     resp->response_type.get_all_layer_bindings = result;
+    return 0;
+}
+
+#if ZMK_KEYMAP_HAS_SENSORS
+
+#define _SENSOR_NAME(idx, node) DT_NODE_FULL_NAME(node)
+#define SENSOR_NAME(idx, _i) _SENSOR_NAME(idx, ZMK_KEYMAP_SENSORS_BY_IDX(idx))
+
+static const char *sensor_names[] = {LISTIFY(ZMK_KEYMAP_SENSORS_LEN, SENSOR_NAME, (, ), 0)};
+
+#endif
+
+static int handle_get_sensors(const zmk_template_GetSensorsRequest *req,
+                              zmk_template_Response *resp) {
+    LOG_DBG("Get sensors");
+
+    zmk_template_GetSensorsResponse result = zmk_template_GetSensorsResponse_init_zero;
+
+#if ZMK_KEYMAP_HAS_SENSORS
+    result.sensors_count = ZMK_KEYMAP_SENSORS_LEN;
+
+    for (uint8_t i = 0; i < ZMK_KEYMAP_SENSORS_LEN; i++) {
+        result.sensors[i].index = i;
+        strncpy(result.sensors[i].name, sensor_names[i], sizeof(result.sensors[i].name) - 1);
+    }
+#else
+    result.sensors_count = 0;
+#endif
+
+    resp->which_response_type = zmk_template_Response_get_sensors_tag;
+    resp->response_type.get_sensors = result;
     return 0;
 }

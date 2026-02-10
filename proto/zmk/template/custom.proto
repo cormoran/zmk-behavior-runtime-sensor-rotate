@@ -9,16 +9,6 @@ message Binding {
     uint32 param2 = 3;
 }
 
-message GetLayerBindingsRequest {
-    uint32 sensor_index = 1;
-    uint32 layer = 2;
-}
-
-message GetLayerBindingsResponse {
-    Binding cw_binding = 1;
-    Binding ccw_binding = 2;
-}
-
 message SetLayerBindingsRequest {
     uint32 sensor_index = 1;
     uint32 layer = 2;
@@ -38,11 +28,20 @@ message LayerBindings {
 
 message GetAllLayerBindingsResponse { repeated LayerBindings bindings = 1; }
 
+message GetSensorsRequest {}
+
+message SensorInfo {
+    uint32 index = 1;
+    string name = 2;
+}
+
+message GetSensorsResponse { repeated SensorInfo sensors = 1; }
+
 message Request {
     oneof request_type {
-        GetLayerBindingsRequest get_layer_bindings = 1;
-        SetLayerBindingsRequest set_layer_bindings = 2;
-        GetAllLayerBindingsRequest get_all_layer_bindings = 3;
+        SetLayerBindingsRequest set_layer_bindings = 1;
+        GetAllLayerBindingsRequest get_all_layer_bindings = 2;
+        GetSensorsRequest get_sensors = 3;
     }
 }
 
@@ -51,8 +50,8 @@ message ErrorResponse { string message = 1; }
 message Response {
     oneof response_type {
         ErrorResponse error = 1;
-        GetLayerBindingsResponse get_layer_bindings = 2;
-        SetLayerBindingsResponse set_layer_bindings = 3;
-        GetAllLayerBindingsResponse get_all_layer_bindings = 4;
+        SetLayerBindingsResponse set_layer_bindings = 2;
+        GetAllLayerBindingsResponse get_all_layer_bindings = 3;
+        GetSensorsResponse get_sensors = 4;
     }
 }

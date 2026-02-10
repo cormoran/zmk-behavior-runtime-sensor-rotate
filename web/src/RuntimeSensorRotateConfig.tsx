@@ -13,6 +13,7 @@ import {
   Response,
   Binding,
   LayerBindings,
+  SensorInfo,
 } from "./proto/zmk/template/custom";
 
 export const SUBSYSTEM_IDENTIFIER = "zmk__template";
@@ -24,6 +25,7 @@ interface BehaviorInfo {
 
 export function RuntimeSensorRotateConfig() {
   const zmkApp = useContext(ZMKAppContext);
+  const [sensors, setSensors] = useState<SensorInfo[]>([]);
   const [sensorIndex, setSensorIndex] = useState<number>(0);
   const [selectedLayer, setSelectedLayer] = useState<number>(0);
   const [allLayerBindings, setAllLayerBindings] = useState<LayerBindings[]>([]);
@@ -32,6 +34,39 @@ export function RuntimeSensorRotateConfig() {
   const [error, setError] = useState<string | null>(null);
 
   const subsystem = zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER);
+
+  // Load available sensors
+  useEffect(() => {
+    const loadSensors = async () => {
+      if (!zmkApp?.state.connection || !subsystem) return;
+
+      try {
+        const service = new ZMKCustomSubsystem(
+          zmkApp.state.connection,
+          subsystem.index
+        );
+
+        const request = Request.create({
+          getSensors: {},
+        });
+
+        const payload = Request.encode(request).finish();
+        const responsePayload = await service.callRPC(payload);
+
+        if (responsePayload) {
+          const resp = Response.decode(responsePayload);
+
+          if (resp.getSensors) {
+            setSensors(resp.getSensors.sensors || []);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load sensors:", err);
+      }
+    };
+
+    loadSensors();
+  }, [zmkApp?.state.connection, subsystem]);
 
   // Load available behaviors from ZMK Studio
   useEffect(() => {
@@ -159,14 +194,24 @@ export function RuntimeSensorRotateConfig() {
       </p>
 
       <div className="input-group">
-        <label htmlFor="sensor-select">Sensor Index:</label>
+        <label htmlFor="sensor-select">Sensor:</label>
         <select
           id="sensor-select"
           value={sensorIndex}
           onChange={(e) => setSensorIndex(parseInt(e.target.value))}
         >
-          <option value="0">Sensor 0</option>
-          <option value="1">Sensor 1</option>
+          {sensors.length > 0 ? (
+            sensors.map((sensor) => (
+              <option key={sensor.index} value={sensor.index}>
+                {sensor.name} (Index {sensor.index})
+              </option>
+            ))
+          ) : (
+            <>
+              <option value="0">Sensor 0</option>
+              <option value="1">Sensor 1</option>
+            </>
+          )}
         </select>
       </div>
 
