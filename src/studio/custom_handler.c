@@ -112,14 +112,17 @@ static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingReque
 
     // Get current bindings - we retrieve all layers since the API doesn't support
     // getting a single layer. We need to preserve the CCW binding when updating CW.
-    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
+    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS] = {
+        0};
     uint8_t actual_layers;
     int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
         req->sensor_index, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS, bindings, &actual_layers);
 
-    // If we couldn't get bindings or layer doesn't exist yet, initialize with zeros
-    if (rc != 0 || req->layer >= actual_layers) {
-        memset(&bindings[req->layer], 0, sizeof(struct runtime_sensor_rotate_layer_bindings));
+    // If layer doesn't exist yet in the returned bindings, it will remain zeroed
+    if (rc != 0) {
+        // On error, we'll start with all zeros (already initialized above)
+        LOG_WRN("Failed to get existing bindings, will create new binding for layer %d",
+                req->layer);
     }
 
     // Update only CW binding for the requested layer
@@ -152,14 +155,17 @@ static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingReq
 
     // Get current bindings - we retrieve all layers since the API doesn't support
     // getting a single layer. We need to preserve the CW binding when updating CCW.
-    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
+    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS] = {
+        0};
     uint8_t actual_layers;
     int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
         req->sensor_index, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS, bindings, &actual_layers);
 
-    // If we couldn't get bindings or layer doesn't exist yet, initialize with zeros
-    if (rc != 0 || req->layer >= actual_layers) {
-        memset(&bindings[req->layer], 0, sizeof(struct runtime_sensor_rotate_layer_bindings));
+    // If layer doesn't exist yet in the returned bindings, it will remain zeroed
+    if (rc != 0) {
+        // On error, we'll start with all zeros (already initialized above)
+        LOG_WRN("Failed to get existing bindings, will create new binding for layer %d",
+                req->layer);
     }
 
     // Update only CCW binding for the requested layer
