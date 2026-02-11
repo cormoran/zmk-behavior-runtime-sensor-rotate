@@ -7,8 +7,8 @@
 
 #include <pb_decode.h>
 #include <pb_encode.h>
+#include <cormoran/rsr/custom.pb.h>
 #include <zmk/studio/custom.h>
-#include <zmk/template/custom.pb.h>
 #include <zmk/behaviors/runtime_sensor_rotate.h>
 #include <zmk/behavior.h>
 #include <zmk/sensors.h>

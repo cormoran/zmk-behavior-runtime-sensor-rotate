@@ -53,7 +53,7 @@ test/
 
 ### 1. Protocol Definition
 
-The protobuf schema is defined in `../proto/zmk/template/custom.proto`:
+The protobuf schema is defined in `../proto/cormoran/rsr/custom.proto`:
 
 ```proto
 message Request {
@@ -77,6 +77,7 @@ message Response {
 ```
 
 **Key message types:**
+
 - `SetLayerCwBindingRequest/Response`: Set clockwise binding for a sensor/layer
 - `SetLayerCcwBindingRequest/Response`: Set counter-clockwise binding for a sensor/layer
 - `GetAllLayerBindingsRequest/Response`: Get all bindings for a sensor
@@ -164,6 +165,7 @@ See the test files in `./test/` for complete examples.
 ### Connecting to Device
 
 1. Build and serve the web UI:
+
    ```bash
    npm install
    npm run build
