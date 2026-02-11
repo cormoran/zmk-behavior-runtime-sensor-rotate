@@ -76,13 +76,13 @@ In your `<keyboard>.keymap`, define a runtime sensor rotate behavior instance:
         default_layer {
             ...
             // If you have two sensors
-            sensor-bindings = <&rsr-trans &rsr-trans>;
+            sensor-bindings = <&rsr_trans &rsr_trans>;
         }
         ...
         layer_n {
             ...
             // Set default binding for layer_n's sensor0
-            sensor-bindings = <&rsr_vol &rsr-trans>;
+            sensor-bindings = <&rsr_vol &rsr_trans>;
         }
     }
 }

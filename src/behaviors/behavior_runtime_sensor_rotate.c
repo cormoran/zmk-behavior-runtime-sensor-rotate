@@ -21,6 +21,8 @@
 #include <zmk/events/position_state_changed.h>
 #include <zmk/behaviors/runtime_sensor_rotate.h>
 
+#include <string.h>
+
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct behavior_runtime_sensor_rotate_config {
@@ -329,9 +331,11 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
             triggered_binding_data.tap_ms = config->default_ccw_binding_params.tap_ms;
         }
     } else {
+#if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_LOCAL_IDS_IN_BINDINGS)
         // Resolve behavior name from local_id for runtime binding
         behavior_name =
             zmk_behavior_find_behavior_name_from_local_id(triggered_binding_data.behavior_local_id);
+#endif
         if (!behavior_name) {
             LOG_ERR("Failed to find behavior for local_id %d",
                     triggered_binding_data.behavior_local_id);
@@ -354,15 +358,11 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
         .param2 = triggered_binding_data.param2,
     };
 
-    // Check if the behavior is transparent
-    const struct device *behavior_dev = zmk_behavior_get_binding(triggered_binding.behavior_dev);
-    if (!behavior_dev) {
-        LOG_ERR("Behavior device not found: %s", triggered_binding.behavior_dev);
+    // TODO: optimize transparent behavior check
+    if (strcmp(triggered_binding.behavior_dev, "transparent") == 0) {
+        LOG_DBG("Binding is transparent behavior, skipping");
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
-
-    LOG_DBG("Runtime sensor binding: %s (triggers=%d, tap_ms=%d)", triggered_binding.behavior_dev,
-            triggers, triggered_binding_data.tap_ms);
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT)
     event.source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL;
