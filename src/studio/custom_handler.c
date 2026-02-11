@@ -16,6 +16,7 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/logging/log.h>
+#include <string.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 /**
@@ -25,9 +26,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
  */
 static struct zmk_rpc_custom_subsystem_meta template_feature_meta = {
     ZMK_RPC_CUSTOM_SUBSYSTEM_UI_URLS("http://localhost:5173"),
-    // Unsecured is suggested by default to avoid unlocking in un-reliable
-    // environments.
-    .security = ZMK_STUDIO_RPC_HANDLER_UNSECURED,
+    .security = ZMK_STUDIO_RPC_HANDLER_SECURED,
 };
 
 /**
@@ -35,12 +34,14 @@ static struct zmk_rpc_custom_subsystem_meta template_feature_meta = {
  * The first argument is the subsystem name used to route requests from the
  * frontend. Format: <namespace>__<feature> (double underscore)
  */
-ZMK_RPC_CUSTOM_SUBSYSTEM(zmk__template, &template_feature_meta, template_rpc_handle_request);
+ZMK_RPC_CUSTOM_SUBSYSTEM(cormoran_rsr, &template_feature_meta, template_rpc_handle_request);
 
-ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(zmk__template, cormoran_rsr_Response);
+ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(cormoran_rsr, cormoran_rsr_Response);
 
-static int handle_set_layer_bindings(const cormoran_rsr_SetLayerBindingsRequest *req,
-                                     cormoran_rsr_Response *resp);
+static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingRequest *req,
+                                       cormoran_rsr_Response *resp);
+static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingRequest *req,
+                                        cormoran_rsr_Response *resp);
 static int handle_get_all_layer_bindings(const cormoran_rsr_GetAllLayerBindingsRequest *req,
                                          cormoran_rsr_Response *resp);
 static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
@@ -53,7 +54,7 @@ static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
 static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
                                         pb_callback_t *encode_response) {
     cormoran_rsr_Response *resp =
-        ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER_ALLOCATE(zmk__template, encode_response);
+        ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER_ALLOCATE(cormoran_rsr, encode_response);
 
     cormoran_rsr_Request req = cormoran_rsr_Request_init_zero;
 
@@ -71,8 +72,11 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
 
     int rc = 0;
     switch (req.which_request_type) {
-    case cormoran_rsr_Request_set_layer_bindings_tag:
-        rc = handle_set_layer_bindings(&req.request_type.set_layer_bindings, resp);
+    case cormoran_rsr_Request_set_layer_cw_binding_tag:
+        rc = handle_set_layer_cw_binding(&req.request_type.set_layer_cw_binding, resp);
+        break;
+    case cormoran_rsr_Request_set_layer_ccw_binding_tag:
+        rc = handle_set_layer_ccw_binding(&req.request_type.set_layer_ccw_binding, resp);
         break;
     case cormoran_rsr_Request_get_all_layer_bindings_tag:
         rc = handle_get_all_layer_bindings(&req.request_type.get_all_layer_bindings, resp);
@@ -94,30 +98,75 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
     return true;
 }
 
-static int handle_set_layer_bindings(const cormoran_rsr_SetLayerBindingsRequest *req,
-                                     cormoran_rsr_Response *resp) {
-    LOG_DBG("Set layer bindings: sensor=%d layer=%d", req->sensor_index, req->layer);
+static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingRequest *req,
+                                       cormoran_rsr_Response *resp) {
+    LOG_DBG("Set layer CW binding: sensor=%d layer=%d", req->sensor_index, req->layer);
 
-    struct runtime_sensor_rotate_layer_bindings bindings;
+    // Validate layer bounds
+    if (req->layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+        LOG_ERR("Layer %d exceeds max layers %d", req->layer, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS);
+        return -EINVAL;
+    }
 
-    // Convert behavior_id to local_id
-    bindings.cw_binding.behavior_local_id = req->cw_binding.behavior_id;
-    bindings.cw_binding.param1 = req->cw_binding.param1;
-    bindings.cw_binding.param2 = req->cw_binding.param2;
-    bindings.cw_binding.tap_ms = req->cw_binding.tap_ms;
+    struct runtime_sensor_rotate_layer_bindings binding = {};
+    int rc = zmk_runtime_sensor_rotate_get_bindings(req->sensor_index, req->layer, &binding);
+    if (rc != 0) {
+        // On error, we'll start with all zeros (already initialized above)
+        LOG_WRN("Failed to get existing bindings, will create new binding for layer %d",
+                req->layer);
+        return -1;
+    }
 
-    bindings.ccw_binding.behavior_local_id = req->ccw_binding.behavior_id;
-    bindings.ccw_binding.param1 = req->ccw_binding.param1;
-    bindings.ccw_binding.param2 = req->ccw_binding.param2;
-    bindings.ccw_binding.tap_ms = req->ccw_binding.tap_ms;
+    // Update only CW binding for the requested layer
+    binding.cw_binding.behavior_local_id = req->binding.behavior_id;
+    binding.cw_binding.param1 = req->binding.param1;
+    binding.cw_binding.param2 = req->binding.param2;
+    binding.cw_binding.tap_ms = req->binding.tap_ms;
 
-    int rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &bindings);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
 
-    cormoran_rsr_SetLayerBindingsResponse result = cormoran_rsr_SetLayerBindingsResponse_init_zero;
+    cormoran_rsr_SetLayerCwBindingResponse result =
+        cormoran_rsr_SetLayerCwBindingResponse_init_zero;
     result.success = (rc == 0);
 
-    resp->which_response_type = cormoran_rsr_Response_set_layer_bindings_tag;
-    resp->response_type.set_layer_bindings = result;
+    resp->which_response_type = cormoran_rsr_Response_set_layer_cw_binding_tag;
+    resp->response_type.set_layer_cw_binding = result;
+    return rc;
+}
+
+static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingRequest *req,
+                                        cormoran_rsr_Response *resp) {
+    LOG_DBG("Set layer CCW binding: sensor=%d layer=%d", req->sensor_index, req->layer);
+
+    // Validate layer bounds
+    if (req->layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+        LOG_ERR("Layer %d exceeds max layers %d", req->layer, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS);
+        return -EINVAL;
+    }
+
+    struct runtime_sensor_rotate_layer_bindings binding = {};
+    int rc = zmk_runtime_sensor_rotate_get_bindings(req->sensor_index, req->layer, &binding);
+    if (rc != 0) {
+        // On error, we'll start with all zeros (already initialized above)
+        LOG_WRN("Failed to get existing bindings, will create new binding for layer %d",
+                req->layer);
+        return -1;
+    }
+
+    // Update only CCW binding for the requested layer
+    binding.ccw_binding.behavior_local_id = req->binding.behavior_id;
+    binding.ccw_binding.param1 = req->binding.param1;
+    binding.ccw_binding.param2 = req->binding.param2;
+    binding.ccw_binding.tap_ms = req->binding.tap_ms;
+
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
+
+    cormoran_rsr_SetLayerCcwBindingResponse result =
+        cormoran_rsr_SetLayerCcwBindingResponse_init_zero;
+    result.success = (rc == 0);
+
+    resp->which_response_type = cormoran_rsr_Response_set_layer_ccw_binding_tag;
+    resp->response_type.set_layer_ccw_binding = result;
     return rc;
 }
 

@@ -24,7 +24,10 @@
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct behavior_runtime_sensor_rotate_config {
-    int tap_ms;
+    const char *default_cw_binding_name;
+    const char *default_ccw_binding_name;
+    struct runtime_sensor_rotate_binding default_cw_binding_params;
+    struct runtime_sensor_rotate_binding default_ccw_binding_params;
 };
 
 struct behavior_runtime_sensor_rotate_data {
@@ -37,26 +40,58 @@ struct behavior_runtime_sensor_rotate_data {
 
 static struct behavior_runtime_sensor_rotate_data global_data = {};
 
+#if ZMK_KEYMAP_HAS_SENSORS
+
+#define _TRANSFORM_SENSOR_ENTRY(idx, layer)                                                        \
+    COND_CODE_1(DT_NODE_HAS_COMPAT(DT_PHANDLE_BY_IDX(layer, sensor_bindings, idx),                 \
+                                   zmk_behavior_runtime_sensor_rotate),                            \
+                (DEVICE_DT_NAME(DT_PHANDLE_BY_IDX(layer, sensor_bindings, idx))), (NULL))
+
+#define SENSOR_LAYER(node)                                                                         \
+    COND_CODE_1(                                                                                   \
+        DT_NODE_HAS_PROP(node, sensor_bindings),                                                   \
+        ({LISTIFY(DT_PROP_LEN(node, sensor_bindings), _TRANSFORM_SENSOR_ENTRY, (, ), node)}),      \
+        ({}))
+
+// TODO: The dimension order here is [layer][sensor]. Different from global_data which is
+// [sensor][layer].
+static const char *global_default_behavior_dev[ZMK_KEYMAP_LAYERS_LEN][ZMK_KEYMAP_SENSORS_LEN] = {
+    DT_FOREACH_CHILD_SEP(DT_INST(0, zmk_keymap), SENSOR_LAYER, (, ))};
+#endif
+
 // Settings storage key
 #define SETTINGS_KEY "rsr"
 
 static int settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg) {
-    const char *next;
     int rc;
+    int sensor_index, layer;
 
-    if (settings_name_steq(name, "bindings", &next) && !next) {
-        if (len != sizeof(global_data.bindings)) {
-            LOG_ERR("Invalid settings data size: %d vs %d", len, sizeof(global_data.bindings));
+    // Parse key format: s<sensor_index>/l<layer>
+    // Example: "s0/l1" for sensor 0, layer 1
+    if (sscanf(name, "s%d/l%d", &sensor_index, &layer) == 2) {
+        if (sensor_index < 0 || sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
+            LOG_WRN("Invalid sensor index in settings: %d", sensor_index);
+            return -EINVAL;
+        }
+        if (layer < 0 || layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+            LOG_WRN("Invalid layer in settings: %d", layer);
             return -EINVAL;
         }
 
-        rc = read_cb(cb_arg, &global_data.bindings, sizeof(global_data.bindings));
+        if (len != sizeof(struct runtime_sensor_rotate_layer_bindings)) {
+            LOG_ERR("Invalid settings data size for s%d/l%d: %d vs %d", sensor_index, layer, len,
+                    sizeof(struct runtime_sensor_rotate_layer_bindings));
+            return -EINVAL;
+        }
+
+        rc = read_cb(cb_arg, &global_data.bindings[sensor_index][layer],
+                     sizeof(struct runtime_sensor_rotate_layer_bindings));
         if (rc < 0) {
-            LOG_ERR("Failed to read settings: %d", rc);
+            LOG_ERR("Failed to read settings for s%d/l%d: %d", sensor_index, layer, rc);
             return rc;
         }
 
-        LOG_INF("Loaded runtime sensor rotate bindings from settings");
+        LOG_DBG("Loaded bindings for sensor %d layer %d", sensor_index, layer);
         return 0;
     }
 
@@ -93,11 +128,14 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
 
     global_data.bindings[sensor_index][layer] = *bindings;
 
-    // Save to settings
-    int rc = settings_save_one(SETTINGS_KEY "/bindings", &global_data.bindings,
-                               sizeof(global_data.bindings));
+    // Save to settings with per-sensor, per-layer key
+    char key[32];
+    snprintf(key, sizeof(key), SETTINGS_KEY "/s%d/l%d", sensor_index, layer);
+
+    int rc = settings_save_one(key, &global_data.bindings[sensor_index][layer],
+                               sizeof(struct runtime_sensor_rotate_layer_bindings));
     if (rc != 0) {
-        LOG_ERR("Failed to save settings: %d", rc);
+        LOG_ERR("Failed to save settings for sensor %d layer %d: %d", sensor_index, layer, rc);
         return rc;
     }
 
@@ -120,13 +158,57 @@ int zmk_runtime_sensor_rotate_get_all_layer_bindings(
     }
 
     for (uint8_t i = 0; i < layers; i++) {
-        bindings_array[i] = global_data.bindings[sensor_index][i];
+        zmk_runtime_sensor_rotate_get_bindings(sensor_index, i, &bindings_array[i]);
     }
 
     if (actual_layers) {
         *actual_layers = layers;
     }
 
+    return 0;
+}
+
+int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_index,
+                                           struct runtime_sensor_rotate_layer_bindings *out) {
+    if (sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
+        return -EINVAL;
+    }
+    if (layer_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+        return -EINVAL;
+    }
+    // set from runtime first
+    *out = global_data.bindings[sensor_index][layer_index];
+    // If not set, fill from default
+    if (out->cw_binding.behavior_local_id == 0 || out->ccw_binding.behavior_local_id == 0) {
+#if ZMK_KEYMAP_HAS_SENSORS
+        if (global_default_behavior_dev[layer_index][sensor_index] != NULL) {
+            const struct device *dev =
+                zmk_behavior_get_binding(global_default_behavior_dev[layer_index][sensor_index]);
+            if (dev) {
+                const struct behavior_runtime_sensor_rotate_config *config = dev->config;
+                if (out->cw_binding.behavior_local_id == 0 &&
+                    config->default_cw_binding_name != NULL) {
+                    out->cw_binding.behavior_local_id =
+                        zmk_behavior_get_local_id(config->default_cw_binding_name);
+                    out->cw_binding.param1 = config->default_cw_binding_params.param1;
+                    out->cw_binding.param2 = config->default_cw_binding_params.param2;
+                    out->cw_binding.tap_ms = config->default_cw_binding_params.tap_ms;
+                }
+                if (out->ccw_binding.behavior_local_id == 0 &&
+                    config->default_ccw_binding_name != NULL) {
+                    out->ccw_binding.behavior_local_id =
+                        zmk_behavior_get_local_id(config->default_ccw_binding_name);
+                    out->ccw_binding.param1 = config->default_ccw_binding_params.param1;
+                    out->ccw_binding.param2 = config->default_ccw_binding_params.param2;
+                    out->ccw_binding.tap_ms = config->default_ccw_binding_params.tap_ms;
+                }
+            } else {
+                LOG_ERR("Behavior device not found: %s",
+                        global_default_behavior_dev[layer_index][sensor_index]);
+            }
+        }
+#endif
+    }
     return 0;
 }
 
@@ -187,9 +269,6 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
                                                   struct zmk_behavior_binding_event event,
                                                   enum behavior_sensor_binding_process_mode mode) {
 
-    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
-    const struct behavior_runtime_sensor_rotate_config *cfg = dev->config;
-
     const int sensor_index = ZMK_SENSOR_POSITION_FROM_VIRTUAL_KEY_POSITION(event.position);
 
     if (sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
@@ -215,27 +294,53 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
     }
 
     struct runtime_sensor_rotate_binding triggered_binding_data;
+    // Check runtime bindings
     if (triggers > 0) {
         triggered_binding_data = global_data.bindings[sensor_index][event.layer].cw_binding;
     } else if (triggers < 0) {
-        triggers = -triggers;
         triggered_binding_data = global_data.bindings[sensor_index][event.layer].ccw_binding;
     } else {
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
-
-    // Check if binding is configured
+    const char *behavior_name = NULL;
     if (triggered_binding_data.behavior_local_id == 0) {
-        LOG_DBG("No binding configured for sensor %d layer %d", sensor_index, event.layer);
-        return ZMK_BEHAVIOR_TRANSPARENT;
+        // Check default bindings
+        const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
+        if (!dev) {
+            LOG_ERR("Behavior device not found: %s", binding->behavior_dev);
+            return ZMK_BEHAVIOR_TRANSPARENT;
+        }
+        const struct behavior_runtime_sensor_rotate_config *config = dev->config;
+        if (triggers > 0 && config->default_cw_binding_name != NULL) {
+            behavior_name = config->default_cw_binding_name;
+#if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_LOCAL_IDS_IN_BINDINGS)
+            triggered_binding_data.behavior_local_id = zmk_behavior_get_local_id(behavior_name);
+#endif
+            triggered_binding_data.param1 = config->default_cw_binding_params.param1;
+            triggered_binding_data.param2 = config->default_cw_binding_params.param2;
+            triggered_binding_data.tap_ms = config->default_cw_binding_params.tap_ms;
+        } else if (triggers < 0 && config->default_ccw_binding_name != NULL) {
+            behavior_name = config->default_ccw_binding_name;
+#if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_LOCAL_IDS_IN_BINDINGS)
+            triggered_binding_data.behavior_local_id = zmk_behavior_get_local_id(behavior_name);
+#endif
+            triggered_binding_data.param1 = config->default_ccw_binding_params.param1;
+            triggered_binding_data.param2 = config->default_ccw_binding_params.param2;
+            triggered_binding_data.tap_ms = config->default_ccw_binding_params.tap_ms;
+        }
+    } else {
+        // Resolve behavior name from local_id for runtime binding
+        behavior_name =
+            zmk_behavior_find_behavior_name_from_local_id(triggered_binding_data.behavior_local_id);
+        if (!behavior_name) {
+            LOG_ERR("Failed to find behavior for local_id %d",
+                    triggered_binding_data.behavior_local_id);
+            return ZMK_BEHAVIOR_TRANSPARENT;
+        }
     }
-
-    // Get behavior name from local_id
-    const char *behavior_name =
-        zmk_behavior_find_behavior_name_from_local_id(triggered_binding_data.behavior_local_id);
-    if (!behavior_name) {
-        LOG_ERR("Failed to find behavior for local_id %d",
-                triggered_binding_data.behavior_local_id);
+    // Check if binding is configured
+    if (triggered_binding_data.behavior_local_id == 0 && behavior_name == NULL) {
+        LOG_DBG("No binding configured for sensor %d layer %d", sensor_index, event.layer);
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
 
@@ -263,15 +368,13 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
     event.source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL;
 #endif
 
-    for (int i = 0; i < triggers; i++) {
-        int press_ret =
-            zmk_behavior_queue_add(&event, triggered_binding, true, triggered_binding_data.tap_ms);
-        int release_ret = zmk_behavior_queue_add(&event, triggered_binding, false, 0);
+    if (triggers < 0) {
+        triggers = -triggers;
+    }
 
-        // If either press or release returns transparent, treat the whole binding as transparent
-        if (press_ret == ZMK_BEHAVIOR_TRANSPARENT || release_ret == ZMK_BEHAVIOR_TRANSPARENT) {
-            return ZMK_BEHAVIOR_TRANSPARENT;
-        }
+    for (int i = 0; i < triggers; i++) {
+        zmk_behavior_queue_add(&event, triggered_binding, true, triggered_binding_data.tap_ms);
+        zmk_behavior_queue_add(&event, triggered_binding, false, 0);
     }
 
     return ZMK_BEHAVIOR_OPAQUE;
@@ -281,16 +384,39 @@ static const struct behavior_driver_api behavior_runtime_sensor_rotate_driver_ap
     .sensor_binding_accept_data = behavior_runtime_sensor_rotate_accept_data,
     .sensor_binding_process = behavior_runtime_sensor_rotate_process};
 
-static int behavior_runtime_sensor_rotate_init(const struct device *dev) { return 0; }
-
 #define RUNTIME_SENSOR_ROTATE_INST(n)                                                              \
     static struct behavior_runtime_sensor_rotate_config                                            \
         behavior_runtime_sensor_rotate_config_##n = {                                              \
-            .tap_ms = DT_INST_PROP_OR(n, tap_ms, 5),                                               \
+            .default_cw_binding_name =                                                             \
+                COND_CODE_1(DT_INST_NODE_HAS_PROP(n, cw_binding),                                  \
+                            (DEVICE_DT_NAME(DT_INST_PHANDLE_BY_IDX(n, cw_binding, 0))), (NULL)),   \
+            .default_ccw_binding_name =                                                            \
+                COND_CODE_1(DT_INST_NODE_HAS_PROP(n, ccw_binding),                                 \
+                            (DEVICE_DT_NAME(DT_INST_PHANDLE_BY_IDX(n, ccw_binding, 0))), (NULL)),  \
+            .default_cw_binding_params = COND_CODE_1(                                              \
+                DT_INST_NODE_HAS_PROP(n, cw_binding),                                              \
+                ({.param1 =                                                                        \
+                      COND_CODE_1(DT_PHA_HAS_CELL_AT_IDX(DT_DRV_INST(n), cw_binding, 0, param1),   \
+                                  (DT_PHA_BY_IDX(DT_DRV_INST(n), cw_binding, 0, param1)), (0)),    \
+                  .param2 =                                                                        \
+                      COND_CODE_1(DT_PHA_HAS_CELL_AT_IDX(DT_DRV_INST(n), cw_binding, 0, param2),   \
+                                  (DT_PHA_BY_IDX(DT_DRV_INST(n), cw_binding, 0, param2)), (0)),    \
+                  .tap_ms = DT_INST_PROP_OR(n, tap_ms, 5)}),                                       \
+                ({})),                                                                             \
+            .default_ccw_binding_params = COND_CODE_1(                                             \
+                DT_INST_NODE_HAS_PROP(n, ccw_binding),                                             \
+                ({.param1 =                                                                        \
+                      COND_CODE_1(DT_PHA_HAS_CELL_AT_IDX(DT_DRV_INST(n), ccw_binding, 0, param1),  \
+                                  (DT_PHA_BY_IDX(DT_DRV_INST(n), ccw_binding, 0, param1)), (0)),   \
+                  .param2 =                                                                        \
+                      COND_CODE_1(DT_PHA_HAS_CELL_AT_IDX(DT_DRV_INST(n), ccw_binding, 0, param2),  \
+                                  (DT_PHA_BY_IDX(DT_DRV_INST(n), ccw_binding, 0, param2)), (0)),   \
+                  .tap_ms = DT_INST_PROP_OR(n, tap_ms, 5)}),                                       \
+                ({})),                                                                             \
     };                                                                                             \
-    BEHAVIOR_DT_INST_DEFINE(n, behavior_runtime_sensor_rotate_init, NULL, &global_data,            \
-                            &behavior_runtime_sensor_rotate_config_##n, POST_KERNEL,               \
-                            CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                                   \
-                            &behavior_runtime_sensor_rotate_driver_api);
+                                                                                                   \
+    BEHAVIOR_DT_INST_DEFINE(                                                                       \
+        n, NULL, NULL, &global_data, &behavior_runtime_sensor_rotate_config_##n, POST_KERNEL,      \
+        CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_runtime_sensor_rotate_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(RUNTIME_SENSOR_ROTATE_INST)

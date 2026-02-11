@@ -63,7 +63,7 @@ describe("App Component", () => {
       // Set up successful connection mock
       mocks.mockSuccessfulConnection({
         deviceName: "Test Keyboard",
-        subsystems: ["zmk__template"],
+        subsystems: ["cormoran_rsr"],
       });
 
       // Mock the serial connect function to return our mock transport

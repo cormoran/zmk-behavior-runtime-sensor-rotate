@@ -10,14 +10,21 @@ message Binding {
     uint32 tap_ms = 4;
 }
 
-message SetLayerBindingsRequest {
+message SetLayerCwBindingRequest {
     uint32 sensor_index = 1;
     uint32 layer = 2;
-    Binding cw_binding = 3;
-    Binding ccw_binding = 4;
+    Binding binding = 3;
 }
 
-message SetLayerBindingsResponse { bool success = 1; }
+message SetLayerCwBindingResponse { bool success = 1; }
+
+message SetLayerCcwBindingRequest {
+    uint32 sensor_index = 1;
+    uint32 layer = 2;
+    Binding binding = 3;
+}
+
+message SetLayerCcwBindingResponse { bool success = 1; }
 
 message GetAllLayerBindingsRequest { uint32 sensor_index = 1; }
 
@@ -40,9 +47,10 @@ message GetSensorsResponse { repeated SensorInfo sensors = 1; }
 
 message Request {
     oneof request_type {
-        SetLayerBindingsRequest set_layer_bindings = 1;
-        GetAllLayerBindingsRequest get_all_layer_bindings = 2;
-        GetSensorsRequest get_sensors = 3;
+        SetLayerCwBindingRequest set_layer_cw_binding = 1;
+        SetLayerCcwBindingRequest set_layer_ccw_binding = 2;
+        GetAllLayerBindingsRequest get_all_layer_bindings = 3;
+        GetSensorsRequest get_sensors = 4;
     }
 }
 
@@ -51,8 +59,9 @@ message ErrorResponse { string message = 1; }
 message Response {
     oneof response_type {
         ErrorResponse error = 1;
-        SetLayerBindingsResponse set_layer_bindings = 2;
-        GetAllLayerBindingsResponse get_all_layer_bindings = 3;
-        GetSensorsResponse get_sensors = 4;
+        SetLayerCwBindingResponse set_layer_cw_binding = 2;
+        SetLayerCcwBindingResponse set_layer_ccw_binding = 3;
+        GetAllLayerBindingsResponse get_all_layer_bindings = 4;
+        GetSensorsResponse get_sensors = 5;
     }
 }

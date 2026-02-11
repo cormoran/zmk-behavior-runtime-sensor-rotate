@@ -17,3 +17,13 @@ properties:
   tap-ms:
     type: int
     default: 5
+  cw-binding:
+    type: phandle-array
+    required: false
+    specifier-space: binding
+    description: Behavior binding for clockwise rotation (e.g., <&kp C_VOL_UP>)
+  ccw-binding:
+    type: phandle-array
+    required: false
+    specifier-space: binding
+    description: Behavior binding for counter-clockwise rotation (e.g., <&kp C_VOL_DN>)
