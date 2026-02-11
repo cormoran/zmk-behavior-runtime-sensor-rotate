@@ -79,7 +79,7 @@ In your `<keyboard>.keymap`, define a runtime sensor rotate behavior instance:
 - `cw-binding` (optional): Default binding for clockwise rotation. Used as fallback when no runtime binding is configured for a layer.
 - `ccw-binding` (optional): Default binding for counter-clockwise rotation. Used as fallback when no runtime binding is configured for a layer.
 
-**Note:** Default bindings are optional. If not specified, the behavior will only respond to runtime-configured bindings set via the Web UI.
+**Note:** Default bindings are optional. If not specified, the behavior will only respond to runtime-configured bindings set via the Web UI. If neither default nor runtime bindings are configured, the behavior is transparent (no action is taken).
 
 Then use it in your sensor bindings:
 
@@ -168,8 +168,8 @@ behaviors {
 **Runtime Bindings (Web UI)**:
 
 *Volume Control (Layer 0)*:
-- Clockwise: `behavior: "kp"`, `param1: C_VOL_UP` (Volume Up)
-- Counter-clockwise: `behavior: "kp"`, `param1: C_VOL_DN` (Volume Down)
+- Clockwise: `behavior: "kp"`, `param1: C_VOL_UP (128)` (Volume Up)
+- Counter-clockwise: `behavior: "kp"`, `param1: C_VOL_DN (129)` (Volume Down)
 
 *Layer Switch (Layer 1)*:
 - Clockwise: `behavior: "to"`, `param1: 2` (Switch to layer 2)
@@ -178,6 +178,8 @@ behaviors {
 *Brightness Control (Layer 2)*:
 - Clockwise: `behavior: "kp"`, `param1: C_BRI_UP` (Brightness Up)
 - Counter-clockwise: `behavior: "kp"`, `param1: C_BRI_DN` (Brightness Down)
+
+**Note:** Key codes can be specified using ZMK symbolic names (e.g., `C_VOL_UP`) or their numeric values (e.g., `128`). See [ZMK keycodes](https://zmk.dev/docs/codes) for reference.
 
 ## Development
 
