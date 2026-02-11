@@ -1,12 +1,15 @@
-# ZMK Module Template - Web Frontend
+# Runtime Sensor Rotate - Web UI
 
-This is a minimal web application template for interacting with ZMK firmware
-modules that implement custom Studio RPC subsystems.
+This is a web application for configuring ZMK runtime sensor rotation bindings
+via a custom Studio RPC subsystem.
 
 ## Features
 
 - **Device Connection**: Connect to ZMK devices via Bluetooth (GATT) or Serial
-- **Custom RPC**: Communicate with your custom firmware module using protobuf
+- **Sensor Configuration**: Configure sensor rotation bindings per layer
+- **Per-Sensor Setup**: Configure multiple sensors independently
+- **Behavior Selection**: Select from available ZMK behaviors via dropdown
+- **Live Updates**: Changes are saved to persistent storage immediately
 - **React + TypeScript**: Modern web development with Vite for fast builds
 - **react-zmk-studio**: Uses the `@cormoran/zmk-studio-react-hook` library for
   simplified ZMK integration
@@ -34,16 +37,16 @@ npm test
 
 ```
 src/
-├── main.tsx              # React entry point
-├── App.tsx               # Main application with connection UI
-├── App.css               # Styles
-└── proto/                # Generated protobuf TypeScript types
+├── main.tsx                          # React entry point
+├── App.tsx                           # Main application with connection UI
+├── RuntimeSensorRotateConfig.tsx     # Sensor rotation configuration component
+├── App.css                           # Styles
+└── proto/                            # Generated protobuf TypeScript types
     └── zmk/template/
-        └── custom.ts
+        └── custom.ts                 # Generated from custom.proto
 
 test/
-├── App.spec.tsx              # Tests for App component
-└── RPCTestSection.spec.tsx   # Tests for RPC functionality
+└── App.spec.tsx                      # Tests for App component
 ```
 
 ## How It Works
@@ -55,17 +58,29 @@ The protobuf schema is defined in `../proto/zmk/template/custom.proto`:
 ```proto
 message Request {
     oneof request_type {
-        SampleRequest sample = 1;
+        SetLayerCwBindingRequest set_layer_cw_binding = 1;
+        SetLayerCcwBindingRequest set_layer_ccw_binding = 2;
+        GetAllLayerBindingsRequest get_all_layer_bindings = 3;
+        GetSensorsRequest get_sensors = 4;
     }
 }
 
 message Response {
     oneof response_type {
         ErrorResponse error = 1;
-        SampleResponse sample = 2;
+        SetLayerCwBindingResponse set_layer_cw_binding = 2;
+        SetLayerCcwBindingResponse set_layer_ccw_binding = 3;
+        GetAllLayerBindingsResponse get_all_layer_bindings = 4;
+        GetSensorsResponse get_sensors = 5;
     }
 }
 ```
+
+**Key message types:**
+- `SetLayerCwBindingRequest/Response`: Set clockwise binding for a sensor/layer
+- `SetLayerCcwBindingRequest/Response`: Set counter-clockwise binding for a sensor/layer
+- `GetAllLayerBindingsRequest/Response`: Get all bindings for a sensor
+- `GetSensorsRequest/Response`: List available sensors
 
 ### 2. Code Generation
 
@@ -116,9 +131,7 @@ npm run test:coverage
 
 The tests demonstrate how to use the `react-zmk-studio` test helpers:
 
-- **App.spec.tsx**: Basic rendering tests for the main application
-- **RPCTestSection.spec.tsx**: Tests showing how to mock ZMK connection and test
-  components that interact with devices
+- **App.spec.tsx**: Tests for the main application component and sensor rotation configuration UI
 
 ### Writing Tests
 
@@ -146,18 +159,35 @@ render(
 
 See the test files in `./test/` for complete examples.
 
-## Customization
+## Usage
 
-To adapt this template for your own ZMK module:
+### Connecting to Device
 
-1. **Update the proto file**: Modify `../proto/zmk/template/custom.proto` with
-   your message types
-2. **Regenerate types**: Run `npm run generate`
-3. **Update subsystem identifier**: Change `SUBSYSTEM_IDENTIFIER` in `App.tsx`
-   to match your firmware registration
-4. **Update RPC logic**: Modify the request/response handling in `App.tsx`
-5. **Update tests**: Modify tests to match your custom subsystem identifier and
-   functionality
+1. Build and serve the web UI:
+   ```bash
+   npm install
+   npm run build
+   # Open dist/index.html or deploy to a web server
+   ```
+
+2. Open the web UI in a browser that supports WebSerial/WebBluetooth (Chrome, Edge)
+
+3. Click "Connect Serial" or "Connect BLE" to connect to your keyboard
+
+### Configuring Bindings
+
+1. **Select Sensor**: Choose the sensor index (0, 1, etc.) from the dropdown
+2. **Load Configuration**: Click "Load Configuration" to fetch current bindings
+3. **Select Layer**: Choose the layer you want to configure
+4. **Configure Clockwise Binding**:
+   - Select behavior from dropdown (e.g., "kp" for key press)
+   - Enter param1 (e.g., key code)
+   - Enter param2 if needed
+   - Specify tap duration in ms
+5. **Configure Counter-Clockwise Binding**: Same as clockwise
+6. **Save**: Click "Save CW Binding" or "Save CCW Binding" to persist changes
+
+The configuration is automatically saved to the keyboard's persistent storage.
 
 ## Dependencies
 
