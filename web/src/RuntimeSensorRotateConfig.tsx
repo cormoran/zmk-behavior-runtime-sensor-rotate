@@ -14,7 +14,7 @@ import {
   Binding,
   LayerBindings,
   SensorInfo,
-} from "./proto/zmk/template/custom";
+} from "./proto/cormoran/rsr/custom";
 import { call_rpc } from "@zmkfirmware/zmk-studio-ts-client";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 
@@ -33,6 +33,7 @@ export function RuntimeSensorRotateConfig() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const subsystem = useMemo(
     () => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [zmkApp?.state.customSubsystems]
   );
 

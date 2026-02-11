@@ -4,10 +4,7 @@
 zephyr_include_directories(include)
 if(CONFIG_ZMK_RUNTIME_SENSOR_ROTATE)
     # target_sources(app PRIVATE ...)
-
-    if(CONFIG_ZMK_BEHAVIOR_RUNTIME_SENSOR_ROTATE)
-        target_sources(app PRIVATE src/behaviors/behavior_runtime_sensor_rotate.c)
-    endif()
+    target_sources(app PRIVATE src/behaviors/behavior_runtime_sensor_rotate.c)
 
     if(CONFIG_ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC)
         file(GLOB_RECURSE C_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/studio/*.c)
