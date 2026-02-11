@@ -178,22 +178,24 @@ int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_i
     }
     // set from runtime first
     *out = global_data.bindings[sensor_index][layer_index];
-    if (out->cw_binding.behavior_local_id == 0 && out->ccw_binding.behavior_local_id == 0) {
-        // If not set, fill from default
+    // If not set, fill from default
+    if (out->cw_binding.behavior_local_id == 0 || out->ccw_binding.behavior_local_id == 0) {
 #if ZMK_KEYMAP_HAS_SENSORS
         if (global_default_behavior_dev[layer_index][sensor_index] != NULL) {
             const struct device *dev =
                 zmk_behavior_get_binding(global_default_behavior_dev[layer_index][sensor_index]);
             if (dev) {
                 const struct behavior_runtime_sensor_rotate_config *config = dev->config;
-                if (config->default_cw_binding_name != NULL &&
-                    config->default_ccw_binding_name != NULL) {
+                if (out->cw_binding.behavior_local_id == 0 &&
+                    config->default_cw_binding_name != NULL) {
                     out->cw_binding.behavior_local_id =
                         zmk_behavior_get_local_id(config->default_cw_binding_name);
                     out->cw_binding.param1 = config->default_cw_binding_params.param1;
                     out->cw_binding.param2 = config->default_cw_binding_params.param2;
                     out->cw_binding.tap_ms = config->default_cw_binding_params.tap_ms;
-
+                }
+                if (out->ccw_binding.behavior_local_id == 0 &&
+                    config->default_ccw_binding_name != NULL) {
                     out->ccw_binding.behavior_local_id =
                         zmk_behavior_get_local_id(config->default_ccw_binding_name);
                     out->ccw_binding.param1 = config->default_ccw_binding_params.param1;
@@ -296,7 +298,6 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
     if (triggers > 0) {
         triggered_binding_data = global_data.bindings[sensor_index][event.layer].cw_binding;
     } else if (triggers < 0) {
-        triggers = -triggers;
         triggered_binding_data = global_data.bindings[sensor_index][event.layer].ccw_binding;
     } else {
         return ZMK_BEHAVIOR_TRANSPARENT;
@@ -366,6 +367,10 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
 #if IS_ENABLED(CONFIG_ZMK_SPLIT)
     event.source = ZMK_POSITION_STATE_CHANGE_SOURCE_LOCAL;
 #endif
+
+    if (triggers < 0) {
+        triggers = -triggers;
+    }
 
     for (int i = 0; i < triggers; i++) {
         zmk_behavior_queue_add(&event, triggered_binding, true, triggered_binding_data.tap_ms);
