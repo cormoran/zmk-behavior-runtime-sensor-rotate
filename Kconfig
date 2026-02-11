@@ -8,12 +8,4 @@ config ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
     default y
     depends on ZMK_STUDIO
 
-config ZMK_BEHAVIOR_RUNTIME_SENSOR_ROTATE
-    bool "Enable runtime configurable sensor rotate behavior"
-    default y
-    depends on ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
-    help
-      Enable runtime configurable sensor rotate behavior that can be
-      configured via ZMK Studio RPC protocol.
-
 endif

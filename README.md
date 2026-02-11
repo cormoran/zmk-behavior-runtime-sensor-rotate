@@ -9,10 +9,8 @@ with persistent storage.
 - **Runtime Configuration**: Configure sensor rotation bindings without reflashing firmware
 - **Default Bindings**: Define static fallback bindings in device tree for immediate functionality
 - **Per-Layer Bindings**: Different bindings for each keyboard layer
-- **Independent CW/CCW Configuration**: Separate control for clockwise and counter-clockwise rotation
 - **Persistent Storage**: Configuration is saved and restored across reboots
 - **Web UI**: Easy-to-use web interface for configuration
-- **Deduplication**: Prevents duplicate trigger processing when the same behavior instance is used across layers
 
 ## Setup
 
@@ -46,11 +44,9 @@ CONFIG_ZMK_STUDIO=y
 # Enable the runtime sensor rotate module
 CONFIG_ZMK_RUNTIME_SENSOR_ROTATE=y
 CONFIG_ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC=y
-CONFIG_ZMK_BEHAVIOR_RUNTIME_SENSOR_ROTATE=y
 
 # Enable settings storage (if not already enabled)
 CONFIG_SETTINGS=y
-CONFIG_SETTINGS_RUNTIME=y
 ```
 
 ### 3. Add to your keymap
@@ -58,68 +54,52 @@ CONFIG_SETTINGS_RUNTIME=y
 In your `<keyboard>.keymap`, define a runtime sensor rotate behavior instance:
 
 ```dts
+#include <behaviors/runtime-sensor-rotate.dtsi>
+
+
 / {
     behaviors {
-        sensor_rotate_runtime: sensor_rotate_runtime {
+        // Optionally define default bindings
+        rsr_vol: rsr_vol {
             compatible = "zmk,behavior-runtime-sensor-rotate";
             #sensor-binding-cells = <0>;
             tap-ms = <5>;
-
-            // Optional: Define default bindings as fallback
-            // These are used when no runtime binding is configured
-            cw-binding = <&kp C_VOL_UP>;   // Default clockwise: Volume Up
-            ccw-binding = <&kp C_VOL_DN>;  // Default counter-clockwise: Volume Down
+            cw-binding = <&kp C_VOL_UP>;
+            ccw-binding = <&kp C_VOL_DN>;
         };
     };
 };
+
+/ {
+	keymap {
+		compatible = "zmk,keymap";
+        default_layer {
+            ...
+            // If you have two sensors
+            sensor-bindings = <&rsr-trans &rsr-trans>;
+        }
+        ...
+        layer_n {
+            ...
+            // Set default binding for layer_n's sensor0
+            sensor-bindings = <&rsr_vol &rsr-trans>;
+        }
+    }
+}
 ```
 
 **Behavior Properties:**
+
 - `tap-ms`: Duration in milliseconds for each trigger press (default: 5)
 - `cw-binding` (optional): Default binding for clockwise rotation. Used as fallback when no runtime binding is configured for a layer.
 - `ccw-binding` (optional): Default binding for counter-clockwise rotation. Used as fallback when no runtime binding is configured for a layer.
 
 **Note:** Default bindings are optional. If not specified, the behavior will only respond to runtime-configured bindings set via the Web UI. If neither default nor runtime bindings are configured, the behavior is transparent (no action is taken).
 
-Then use it in your sensor bindings:
-
-```dts
-&sensors {
-    triggers-per-rotation = <20>;
-};
-
-&left_encoder {
-    bindings = <&sensor_rotate_runtime>;
-};
-```
-
-## Usage
-
-### Default Bindings
-
-You can define static default bindings in your device tree configuration. These serve as fallback values when no runtime binding is configured:
-
-```dts
-behaviors {
-    encoder_left: encoder_left {
-        compatible = "zmk,behavior-runtime-sensor-rotate";
-        #sensor-binding-cells = <0>;
-        tap-ms = <5>;
-        cw-binding = <&kp C_VOL_UP>;
-        ccw-binding = <&kp C_VOL_DN>;
-    };
-}
-```
-
-With default bindings:
-- The encoder works immediately without Web UI configuration
-- You can override defaults per-layer using the Web UI
-- Runtime bindings take precedence over default bindings
-- If you clear a runtime binding, it falls back to the default
-
 ### Web UI Configuration
 
 1. **Build and deploy the Web UI**:
+
    ```bash
    cd web
    npm install
@@ -142,45 +122,6 @@ With default bindings:
 
 **Note:** Runtime bindings configured via Web UI override default bindings specified in device tree.
 
-### Example Configurations
-
-**Default Bindings (Device Tree)**:
-```dts
-behaviors {
-    encoder_main: encoder_main {
-        compatible = "zmk,behavior-runtime-sensor-rotate";
-        #sensor-binding-cells = <0>;
-        tap-ms = <5>;
-        cw-binding = <&kp C_VOL_UP>;   // Volume Up
-        ccw-binding = <&kp C_VOL_DN>;  // Volume Down
-    };
-
-    encoder_alt: encoder_alt {
-        compatible = "zmk,behavior-runtime-sensor-rotate";
-        #sensor-binding-cells = <0>;
-        tap-ms = <10>;
-        cw-binding = <&kp PG_UP>;      // Page Up
-        ccw-binding = <&kp PG_DN>;     // Page Down
-    };
-}
-```
-
-**Runtime Bindings (Web UI)**:
-
-*Volume Control (Layer 0)*:
-- Clockwise: `behavior: "kp"`, `param1: C_VOL_UP (128)` (Volume Up)
-- Counter-clockwise: `behavior: "kp"`, `param1: C_VOL_DN (129)` (Volume Down)
-
-*Layer Switch (Layer 1)*:
-- Clockwise: `behavior: "to"`, `param1: 2` (Switch to layer 2)
-- Counter-clockwise: `behavior: "to"`, `param1: 0` (Switch to layer 0)
-
-*Brightness Control (Layer 2)*:
-- Clockwise: `behavior: "kp"`, `param1: C_BRI_UP` (Brightness Up)
-- Counter-clockwise: `behavior: "kp"`, `param1: C_BRI_DN` (Brightness Down)
-
-**Note:** Key codes can be specified using ZMK symbolic names (e.g., `C_VOL_UP`) or their numeric values (e.g., `128`). See [ZMK keycodes](https://zmk.dev/docs/codes) for reference.
-
 ## Development
 
 ### Repository Structure
@@ -200,10 +141,6 @@ behaviors {
     └── test/              # Web UI tests
 ```
 
-### Building Firmware
-
-See the main [ZMK documentation](https://zmk.dev/docs) for building firmware with modules.
-
 ### Web UI Development
 
 ```bash
@@ -213,95 +150,6 @@ npm run dev      # Start development server
 npm run build    # Build for production
 npm test         # Run tests
 ```
-
-## How It Works
-
-### Firmware
-
-1. **Behavior**: The `zmk,behavior-runtime-sensor-rotate` behavior maintains per-layer bindings in memory and storage
-   - Supports optional default bindings defined in device tree
-   - Runtime bindings override defaults on a per-layer basis
-   - Automatically falls back to defaults when runtime bindings are not configured
-
-2. **RPC Protocol**: Custom Studio RPC handlers allow the web UI to get/set bindings
-   - Separate methods for clockwise and counter-clockwise bindings
-   - Per-sensor, per-layer configuration granularity
-
-3. **Storage**: Zephyr's settings subsystem persists configuration across reboots
-   - Each sensor/layer combination is stored independently
-   - Key format: `rsr/s<sensor>/l<layer>`
-
-4. **Deduplication**: A flag prevents processing the same sensor data multiple times when a behavior instance is shared across layers
-
-### Web UI
-
-1. Connects to the keyboard via WebSerial
-2. Calls custom RPC methods to retrieve/update configuration
-3. Provides an intuitive interface for configuring bindings per layer
-
-## Technical Details
-
-### Protobuf Messages
-
-The module uses custom RPC methods for configuration:
-
-- **`SetLayerCwBindingRequest/Response`**: Set clockwise binding for a specific sensor and layer
-  - `sensor_index`: Sensor index (0, 1, etc.)
-  - `layer`: Layer index
-  - `binding`: Binding configuration (behavior_id, param1, param2, tap_ms)
-
-- **`SetLayerCcwBindingRequest/Response`**: Set counter-clockwise binding for a specific sensor and layer
-  - `sensor_index`: Sensor index (0, 1, etc.)
-  - `layer`: Layer index
-  - `binding`: Binding configuration (behavior_id, param1, param2, tap_ms)
-
-- **`GetAllLayerBindingsRequest/Response`**: Get bindings for all layers of a sensor
-  - Request: `sensor_index`
-  - Response: Array of `LayerBindings` containing CW and CCW bindings for each layer
-
-- **`GetSensorsRequest/Response`**: List all available sensors
-  - Response: Array of `SensorInfo` with index and name
-
-### Binding Priority
-
-The behavior uses a fallback mechanism for bindings:
-
-1. **Runtime bindings** (set via Web UI) take highest priority
-2. **Default bindings** (defined in device tree) are used as fallback
-3. If neither is configured, the behavior is transparent (no action)
-
-This allows you to:
-- Set sensible defaults in firmware
-- Override defaults per-layer at runtime
-- Clear runtime bindings to fall back to defaults
-
-### Storage Format
-
-Bindings are stored in flash using Zephyr's settings subsystem:
-- Base key: `rsr` (runtime sensor rotate)
-- Per-binding key format: `rsr/s<sensor_index>/l<layer>`
-  - Example: `rsr/s0/l1` for sensor 0, layer 1
-  - Example: `rsr/s1/l0` for sensor 1, layer 0
-
-Each binding contains:
-- `cw_binding`: Clockwise rotation behavior
-- `ccw_binding`: Counter-clockwise rotation behavior
-- Each binding includes: `behavior_local_id`, `param1`, `param2`, `tap_ms`
-
-### Limitations
-
-- Maximum 2 sensors supported (configurable via `ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS`)
-- Maximum 8 layers supported (configurable via `ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS`)
-- Behavior names are limited to 32 characters
-
-## More Information
-
-This module is based on the [ZMK Module Template with Custom Studio RPC](https://github.com/cormoran/zmk-module-template-with-custom-studio-rpc).
-
-For more information about ZMK modules:
-- [ZMK Module Creation](https://zmk.dev/docs/development/module-creation)
-- [Zephyr Modules](https://docs.zephyrproject.org/latest/develop/modules.html)
-- [react-zmk-studio](https://github.com/cormoran/react-zmk-studio)
 
 ## Development Guide
 
@@ -465,7 +313,6 @@ Then, the Web UI will be available in
 For previewing web UI changes in pull requests:
 
 1. Create a Cloudflare Workers project and configure secrets:
-
    - `CLOUDFLARE_API_TOKEN`: API token with Cloudflare Pages edit permission
    - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
    - (Optional) `CLOUDFLARE_PROJECT_NAME`: Project name (defaults to `zmk-module-web-ui`)
