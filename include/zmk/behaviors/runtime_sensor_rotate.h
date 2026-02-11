@@ -39,6 +39,12 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
     const struct runtime_sensor_rotate_layer_bindings *bindings);
 
 /**
+ * Get the layer bindings for a specific sensor and layer
+ */
+int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_index,
+                                           struct runtime_sensor_rotate_layer_bindings *out);
+
+/**
  * Get all layer bindings for a specific sensor
  */
 int zmk_runtime_sensor_rotate_get_all_layer_bindings(
