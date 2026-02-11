@@ -149,9 +149,8 @@ export function RuntimeSensorRotateConfig() {
     }
   }, [zmkApp, subsystem, sensorIndex]);
 
-  // Save bindings for a specific layer
-  const saveLayerBindings = useCallback(
-    async (layer: number, cwBinding: Binding, ccwBinding: Binding) => {
+  const saveLayerCwBindings = useCallback(
+    async (layer: number, cwBinding: Binding, reload: boolean) => {
       if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
 
       setIsLoading(true);
@@ -164,11 +163,10 @@ export function RuntimeSensorRotateConfig() {
         );
 
         const request = Request.create({
-          setLayerBindings: {
+          setLayerCwBinding: {
             sensorIndex: sensorIndex,
             layer: layer,
-            cwBinding: cwBinding,
-            ccwBinding: ccwBinding,
+            binding: cwBinding,
           },
         });
 
@@ -178,9 +176,11 @@ export function RuntimeSensorRotateConfig() {
         if (responsePayload) {
           const resp = Response.decode(responsePayload);
 
-          if (resp.setLayerBindings?.success) {
+          if (resp.setLayerCwBinding?.success) {
             // Reload bindings to show updated values
-            await loadAllLayerBindings();
+            if (reload) {
+              await loadAllLayerBindings();
+            }
           } else if (resp.error) {
             setError(`Error: ${resp.error.message}`);
           }
@@ -195,6 +195,63 @@ export function RuntimeSensorRotateConfig() {
       }
     },
     [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+  );
+
+  const saveLayerCcwBindings = useCallback(
+    async (layer: number, ccwBinding: Binding, reload: boolean) => {
+      if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const service = new ZMKCustomSubsystem(
+          zmkApp.state.connection,
+          subsystem.index
+        );
+
+        const request = Request.create({
+          setLayerCcwBinding: {
+            sensorIndex: sensorIndex,
+            layer: layer,
+            binding: ccwBinding,
+          },
+        });
+
+        const payload = Request.encode(request).finish();
+        const responsePayload = await service.callRPC(payload);
+
+        if (responsePayload) {
+          const resp = Response.decode(responsePayload);
+
+          if (resp.setLayerCcwBinding?.success) {
+            // Reload bindings to show updated values
+            if (reload) {
+              await loadAllLayerBindings();
+            }
+          } else if (resp.error) {
+            setError(`Error: ${resp.error.message}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save layer bindings:", err);
+        setError(
+          `Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+  );
+
+  // Save bindings for a specific layer
+  const saveLayerBindings = useCallback(
+    async (layer: number, cwBinding: Binding, ccwBinding: Binding) => {
+      await saveLayerCwBindings(layer, cwBinding, false);
+      await saveLayerCcwBindings(layer, ccwBinding, true);
+    },
+    [saveLayerCwBindings, saveLayerCcwBindings]
   );
 
   if (!zmkApp) return null;

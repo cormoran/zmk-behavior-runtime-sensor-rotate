@@ -158,47 +158,55 @@ int zmk_runtime_sensor_rotate_get_all_layer_bindings(
     }
 
     for (uint8_t i = 0; i < layers; i++) {
-        // set from runtime first
-        bindings_array[i] = global_data.bindings[sensor_index][i];
-        // then fill from default if not set
-        if (bindings_array[i].cw_binding.behavior_local_id == 0 &&
-            bindings_array[i].ccw_binding.behavior_local_id == 0) {
-#if ZMK_KEYMAP_HAS_SENSORS
-            if (global_default_behavior_dev[i][sensor_index] != NULL) {
-                const struct device *dev =
-                    zmk_behavior_get_binding(global_default_behavior_dev[i][sensor_index]);
-                if (dev) {
-                    const struct behavior_runtime_sensor_rotate_config *config = dev->config;
-                    if (config->default_cw_binding_name != NULL &&
-                        config->default_ccw_binding_name != NULL) {
-                        bindings_array[i].cw_binding.behavior_local_id =
-                            zmk_behavior_get_local_id(config->default_cw_binding_name);
-                        bindings_array[i].cw_binding.param1 =
-                            config->default_cw_binding_params.param1;
-                        bindings_array[i].cw_binding.param2 =
-                            config->default_cw_binding_params.param2;
-                        bindings_array[i].cw_binding.tap_ms =
-                            config->default_cw_binding_params.tap_ms;
-
-                        bindings_array[i].ccw_binding.behavior_local_id =
-                            zmk_behavior_get_local_id(config->default_ccw_binding_name);
-                        bindings_array[i].ccw_binding.param1 =
-                            config->default_ccw_binding_params.param1;
-                        bindings_array[i].ccw_binding.param2 =
-                            config->default_ccw_binding_params.param2;
-                        bindings_array[i].ccw_binding.tap_ms =
-                            config->default_ccw_binding_params.tap_ms;
-                    }
-                }
-            }
-#endif
-        }
+        zmk_runtime_sensor_rotate_get_bindings(sensor_index, i, &bindings_array[i]);
     }
 
     if (actual_layers) {
         *actual_layers = layers;
     }
 
+    return 0;
+}
+
+int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_index,
+                                           struct runtime_sensor_rotate_layer_bindings *out) {
+    if (sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
+        return -EINVAL;
+    }
+    if (layer_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
+        return -EINVAL;
+    }
+    // set from runtime first
+    *out = global_data.bindings[sensor_index][layer_index];
+    if (out->cw_binding.behavior_local_id == 0 && out->ccw_binding.behavior_local_id == 0) {
+        // If not set, fill from default
+#if ZMK_KEYMAP_HAS_SENSORS
+        if (global_default_behavior_dev[layer_index][sensor_index] != NULL) {
+            const struct device *dev =
+                zmk_behavior_get_binding(global_default_behavior_dev[layer_index][sensor_index]);
+            if (dev) {
+                const struct behavior_runtime_sensor_rotate_config *config = dev->config;
+                if (config->default_cw_binding_name != NULL &&
+                    config->default_ccw_binding_name != NULL) {
+                    out->cw_binding.behavior_local_id =
+                        zmk_behavior_get_local_id(config->default_cw_binding_name);
+                    out->cw_binding.param1 = config->default_cw_binding_params.param1;
+                    out->cw_binding.param2 = config->default_cw_binding_params.param2;
+                    out->cw_binding.tap_ms = config->default_cw_binding_params.tap_ms;
+
+                    out->ccw_binding.behavior_local_id =
+                        zmk_behavior_get_local_id(config->default_ccw_binding_name);
+                    out->ccw_binding.param1 = config->default_ccw_binding_params.param1;
+                    out->ccw_binding.param2 = config->default_ccw_binding_params.param2;
+                    out->ccw_binding.tap_ms = config->default_ccw_binding_params.tap_ms;
+                }
+            } else {
+                LOG_ERR("Behavior device not found: %s",
+                        global_default_behavior_dev[layer_index][sensor_index]);
+            }
+        }
+#endif
+    }
     return 0;
 }
 

@@ -26,9 +26,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
  */
 static struct zmk_rpc_custom_subsystem_meta template_feature_meta = {
     ZMK_RPC_CUSTOM_SUBSYSTEM_UI_URLS("http://localhost:5173"),
-    // Unsecured is suggested by default to avoid unlocking in un-reliable
-    // environments.
-    .security = ZMK_STUDIO_RPC_HANDLER_UNSECURED,
+    .security = ZMK_STUDIO_RPC_HANDLER_SECURED,
 };
 
 /**
@@ -110,29 +108,22 @@ static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingReque
         return -EINVAL;
     }
 
-    // Get current bindings - we retrieve all layers since the API doesn't support
-    // getting a single layer. We need to preserve the CCW binding when updating CW.
-    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS] = {
-        0};
-    uint8_t actual_layers;
-    int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
-        req->sensor_index, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS, bindings, &actual_layers);
-
-    // If layer doesn't exist yet in the returned bindings, it will remain zeroed
+    struct runtime_sensor_rotate_layer_bindings binding = {};
+    int rc = zmk_runtime_sensor_rotate_get_bindings(req->sensor_index, req->layer, &binding);
     if (rc != 0) {
         // On error, we'll start with all zeros (already initialized above)
         LOG_WRN("Failed to get existing bindings, will create new binding for layer %d",
                 req->layer);
+        return -1;
     }
 
     // Update only CW binding for the requested layer
-    bindings[req->layer].cw_binding.behavior_local_id = req->binding.behavior_id;
-    bindings[req->layer].cw_binding.param1 = req->binding.param1;
-    bindings[req->layer].cw_binding.param2 = req->binding.param2;
-    bindings[req->layer].cw_binding.tap_ms = req->binding.tap_ms;
+    binding.cw_binding.behavior_local_id = req->binding.behavior_id;
+    binding.cw_binding.param1 = req->binding.param1;
+    binding.cw_binding.param2 = req->binding.param2;
+    binding.cw_binding.tap_ms = req->binding.tap_ms;
 
-    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer,
-                                                      &bindings[req->layer]);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
 
     cormoran_rsr_SetLayerCwBindingResponse result =
         cormoran_rsr_SetLayerCwBindingResponse_init_zero;
@@ -153,29 +144,22 @@ static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingReq
         return -EINVAL;
     }
 
-    // Get current bindings - we retrieve all layers since the API doesn't support
-    // getting a single layer. We need to preserve the CW binding when updating CCW.
-    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS] = {
-        0};
-    uint8_t actual_layers;
-    int rc = zmk_runtime_sensor_rotate_get_all_layer_bindings(
-        req->sensor_index, ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS, bindings, &actual_layers);
-
-    // If layer doesn't exist yet in the returned bindings, it will remain zeroed
+    struct runtime_sensor_rotate_layer_bindings binding = {};
+    int rc = zmk_runtime_sensor_rotate_get_bindings(req->sensor_index, req->layer, &binding);
     if (rc != 0) {
         // On error, we'll start with all zeros (already initialized above)
         LOG_WRN("Failed to get existing bindings, will create new binding for layer %d",
                 req->layer);
+        return -1;
     }
 
     // Update only CCW binding for the requested layer
-    bindings[req->layer].ccw_binding.behavior_local_id = req->binding.behavior_id;
-    bindings[req->layer].ccw_binding.param1 = req->binding.param1;
-    bindings[req->layer].ccw_binding.param2 = req->binding.param2;
-    bindings[req->layer].ccw_binding.tap_ms = req->binding.tap_ms;
+    binding.ccw_binding.behavior_local_id = req->binding.behavior_id;
+    binding.ccw_binding.param1 = req->binding.param1;
+    binding.ccw_binding.param2 = req->binding.param2;
+    binding.ccw_binding.tap_ms = req->binding.tap_ms;
 
-    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer,
-                                                      &bindings[req->layer]);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
 
     cormoran_rsr_SetLayerCcwBindingResponse result =
         cormoran_rsr_SetLayerCcwBindingResponse_init_zero;
