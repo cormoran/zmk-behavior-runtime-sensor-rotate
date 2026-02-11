@@ -33,6 +33,7 @@ export function RuntimeSensorRotateConfig() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const subsystem = useMemo(
     () => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [zmkApp?.state.customSubsystems]
   );
 
