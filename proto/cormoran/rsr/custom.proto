@@ -14,17 +14,25 @@ message SetLayerCwBindingRequest {
     uint32 sensor_index = 1;
     uint32 layer = 2;
     Binding binding = 3;
+    bool skip_save = 4; // If true, updates runtime but doesn't save to flash
 }
 
-message SetLayerCwBindingResponse { bool success = 1; }
+message SetLayerCwBindingResponse {
+    bool success = 1;
+    bool has_pending_changes = 2; // True if there are unsaved changes
+}
 
 message SetLayerCcwBindingRequest {
     uint32 sensor_index = 1;
     uint32 layer = 2;
     Binding binding = 3;
+    bool skip_save = 4; // If true, updates runtime but doesn't save to flash
 }
 
-message SetLayerCcwBindingResponse { bool success = 1; }
+message SetLayerCcwBindingResponse {
+    bool success = 1;
+    bool has_pending_changes = 2; // True if there are unsaved changes
+}
 
 message GetAllLayerBindingsRequest { uint32 sensor_index = 1; }
 
@@ -34,7 +42,10 @@ message LayerBindings {
     Binding ccw_binding = 3;
 }
 
-message GetAllLayerBindingsResponse { repeated LayerBindings bindings = 1; }
+message GetAllLayerBindingsResponse {
+    repeated LayerBindings bindings = 1;
+    bool has_pending_changes = 2; // True if there are unsaved changes
+}
 
 message GetSensorsRequest {}
 
@@ -42,6 +53,10 @@ message SensorInfo {
     uint32 index = 1;
     string name = 2;
 }
+
+message SavePendingChangesRequest {}
+
+message SavePendingChangesResponse { bool success = 1; }
 
 message GetSensorsResponse { repeated SensorInfo sensors = 1; }
 
@@ -51,6 +66,7 @@ message Request {
         SetLayerCcwBindingRequest set_layer_ccw_binding = 2;
         GetAllLayerBindingsRequest get_all_layer_bindings = 3;
         GetSensorsRequest get_sensors = 4;
+        SavePendingChangesRequest save_pending_changes = 5;
     }
 }
 
@@ -63,5 +79,6 @@ message Response {
         SetLayerCcwBindingResponse set_layer_ccw_binding = 3;
         GetAllLayerBindingsResponse get_all_layer_bindings = 4;
         GetSensorsResponse get_sensors = 5;
+        SavePendingChangesResponse save_pending_changes = 6;
     }
 }
