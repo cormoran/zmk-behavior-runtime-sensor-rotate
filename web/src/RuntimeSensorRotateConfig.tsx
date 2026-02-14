@@ -29,12 +29,11 @@ export function RuntimeSensorRotateConfig() {
   const [behaviors, setBehaviors] = useState<GetBehaviorDetailsResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const subsystem = useMemo(
     () => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [zmkApp?.state.customSubsystems]
+    [zmkApp]
   );
 
   // Load available sensors
@@ -136,6 +135,9 @@ export function RuntimeSensorRotateConfig() {
         console.log("Received layer bindings response:", resp);
         if (resp.getAllLayerBindings) {
           setAllLayerBindings(resp.getAllLayerBindings.bindings || []);
+          setHasPendingChanges(
+            resp.getAllLayerBindings.hasPendingChanges || false
+          );
         } else if (resp.error) {
           setError(`Error: ${resp.error.message}`);
         }
@@ -151,7 +153,12 @@ export function RuntimeSensorRotateConfig() {
   }, [zmkApp, subsystem, sensorIndex]);
 
   const saveLayerCwBindings = useCallback(
-    async (layer: number, cwBinding: Binding, reload: boolean) => {
+    async (
+      layer: number,
+      cwBinding: Binding,
+      reload: boolean,
+      skipSave: boolean = false
+    ) => {
       if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
 
       setIsLoading(true);
@@ -168,6 +175,7 @@ export function RuntimeSensorRotateConfig() {
             sensorIndex: sensorIndex,
             layer: layer,
             binding: cwBinding,
+            skipSave: skipSave,
           },
         });
 
@@ -178,6 +186,9 @@ export function RuntimeSensorRotateConfig() {
           const resp = Response.decode(responsePayload);
 
           if (resp.setLayerCwBinding?.success) {
+            setHasPendingChanges(
+              resp.setLayerCwBinding.hasPendingChanges || false
+            );
             // Reload bindings to show updated values
             if (reload) {
               await loadAllLayerBindings();
@@ -195,11 +206,16 @@ export function RuntimeSensorRotateConfig() {
         setIsLoading(false);
       }
     },
-    [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+    [zmkApp, subsystem, sensorIndex, loadAllLayerBindings]
   );
 
   const saveLayerCcwBindings = useCallback(
-    async (layer: number, ccwBinding: Binding, reload: boolean) => {
+    async (
+      layer: number,
+      ccwBinding: Binding,
+      reload: boolean,
+      skipSave: boolean = false
+    ) => {
       if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
 
       setIsLoading(true);
@@ -216,6 +232,7 @@ export function RuntimeSensorRotateConfig() {
             sensorIndex: sensorIndex,
             layer: layer,
             binding: ccwBinding,
+            skipSave: skipSave,
           },
         });
 
@@ -226,6 +243,9 @@ export function RuntimeSensorRotateConfig() {
           const resp = Response.decode(responsePayload);
 
           if (resp.setLayerCcwBinding?.success) {
+            setHasPendingChanges(
+              resp.setLayerCcwBinding.hasPendingChanges || false
+            );
             // Reload bindings to show updated values
             if (reload) {
               await loadAllLayerBindings();
@@ -243,17 +263,63 @@ export function RuntimeSensorRotateConfig() {
         setIsLoading(false);
       }
     },
-    [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+    [zmkApp, subsystem, sensorIndex, loadAllLayerBindings]
   );
 
   // Save bindings for a specific layer
   const saveLayerBindings = useCallback(
-    async (layer: number, cwBinding: Binding, ccwBinding: Binding) => {
-      await saveLayerCwBindings(layer, cwBinding, false);
-      await saveLayerCcwBindings(layer, ccwBinding, true);
+    async (
+      layer: number,
+      cwBinding: Binding,
+      ccwBinding: Binding,
+      skipSave: boolean = false
+    ) => {
+      await saveLayerCwBindings(layer, cwBinding, false, skipSave);
+      await saveLayerCcwBindings(layer, ccwBinding, true, skipSave);
     },
     [saveLayerCwBindings, saveLayerCcwBindings]
   );
+
+  // Save all pending changes to flash
+  const savePendingChanges = useCallback(async () => {
+    if (!zmkApp || !zmkApp.state.connection || !subsystem) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const service = new ZMKCustomSubsystem(
+        zmkApp.state.connection,
+        subsystem.index
+      );
+
+      const request = Request.create({
+        savePendingChanges: {},
+      });
+
+      const payload = Request.encode(request).finish();
+      const responsePayload = await service.callRPC(payload);
+
+      if (responsePayload) {
+        const resp = Response.decode(responsePayload);
+
+        if (resp.savePendingChanges?.success) {
+          setHasPendingChanges(false);
+          // Reload to confirm saved state
+          await loadAllLayerBindings();
+        } else if (resp.error) {
+          setError(`Error: ${resp.error.message}`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to save pending changes:", err);
+      setError(
+        `Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [zmkApp, subsystem, loadAllLayerBindings]);
 
   if (!zmkApp) return null;
 
@@ -307,6 +373,31 @@ export function RuntimeSensorRotateConfig() {
         {isLoading ? "⏳ Loading..." : "📥 Load Configuration"}
       </button>
 
+      {hasPendingChanges && (
+        <div
+          style={{
+            backgroundColor: "#fff3cd",
+            border: "1px solid #ffc107",
+            borderRadius: "4px",
+            padding: "12px",
+            marginTop: "12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span>⚠️ You have unsaved changes</span>
+          <button
+            className="btn btn-primary"
+            disabled={isLoading}
+            onClick={savePendingChanges}
+            style={{ marginLeft: "12px" }}
+          >
+            {isLoading ? "⏳ Saving..." : "💾 Save to Flash"}
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="error-message">
           <p>🚨 {error}</p>
@@ -339,6 +430,7 @@ export function RuntimeSensorRotateConfig() {
               behaviors={behaviors}
               onSave={saveLayerBindings}
               isLoading={isLoading}
+              hasPendingChanges={hasPendingChanges}
             />
           )}
         </div>
@@ -351,8 +443,14 @@ interface LayerBindingEditorProps {
   layer: number;
   bindings: LayerBindings;
   behaviors: GetBehaviorDetailsResponse[];
-  onSave: (layer: number, cwBinding: Binding, ccwBinding: Binding) => void;
+  onSave: (
+    layer: number,
+    cwBinding: Binding,
+    ccwBinding: Binding,
+    skipSave?: boolean
+  ) => void;
   isLoading: boolean;
+  hasPendingChanges: boolean;
 }
 
 function LayerBindingEditor({
@@ -361,6 +459,7 @@ function LayerBindingEditor({
   behaviors,
   onSave,
   isLoading,
+  hasPendingChanges,
 }: LayerBindingEditorProps) {
   const [cwBehaviorId, setCwBehaviorId] = useState(
     bindings.cwBinding?.behaviorId || 0
@@ -375,6 +474,25 @@ function LayerBindingEditor({
   const [ccwParam1, setCcwParam1] = useState(bindings.ccwBinding?.param1 || 0);
   const [ccwParam2, setCcwParam2] = useState(bindings.ccwBinding?.param2 || 0);
   const [ccwTapMs, setCcwTapMs] = useState(bindings.ccwBinding?.tapMs || 100);
+
+  const handleApply = () => {
+    const cwBinding: Binding = {
+      behaviorId: cwBehaviorId,
+      param1: cwParam1,
+      param2: cwParam2,
+      tapMs: cwTapMs,
+    };
+
+    const ccwBinding: Binding = {
+      behaviorId: ccwBehaviorId,
+      param1: ccwParam1,
+      param2: ccwParam2,
+      tapMs: ccwTapMs,
+    };
+
+    // Apply changes without saving to flash
+    onSave(layer, cwBinding, ccwBinding, true);
+  };
 
   const handleSave = () => {
     const cwBinding: Binding = {
@@ -391,7 +509,8 @@ function LayerBindingEditor({
       tapMs: ccwTapMs,
     };
 
-    onSave(layer, cwBinding, ccwBinding);
+    // Save changes to flash immediately
+    onSave(layer, cwBinding, ccwBinding, false);
   };
 
   // Helper to get behavior name from ID
@@ -492,13 +611,28 @@ function LayerBindingEditor({
         </div>
       </div>
 
-      <button
-        className="btn btn-primary"
-        disabled={isLoading}
-        onClick={handleSave}
-      >
-        {isLoading ? "⏳ Saving..." : "💾 Save Bindings"}
-      </button>
+      <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+        <button
+          className="btn btn-secondary"
+          disabled={isLoading}
+          onClick={handleApply}
+        >
+          {isLoading ? "⏳ Applying..." : "✓ Apply (Test without saving)"}
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={isLoading}
+          onClick={handleSave}
+        >
+          {isLoading ? "⏳ Saving..." : "💾 Save to Flash"}
+        </button>
+      </div>
+      {hasPendingChanges && (
+        <p style={{ marginTop: "8px", fontSize: "0.9em", color: "#856404" }}>
+          ℹ️ Changes applied but not saved. Click "Save to Flash" above to
+          persist.
+        </p>
+      )}
     </div>
   );
 }
