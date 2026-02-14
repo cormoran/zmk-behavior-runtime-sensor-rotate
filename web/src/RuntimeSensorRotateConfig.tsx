@@ -491,7 +491,7 @@ function LayerBindingEditor({
     };
 
     // Apply changes without saving to flash
-    onSave(layer, cwBinding, ccwBinding, true);
+    onSave(layer, cwBinding, ccwBinding, /* skipSave */ true);
   };
 
   const handleSave = () => {

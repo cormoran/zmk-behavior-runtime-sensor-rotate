@@ -199,6 +199,8 @@ int zmk_runtime_sensor_rotate_save_pending_changes(void) {
     int rc = 0;
     int saved_count = 0;
 
+    // Save all pending changes, continuing even if individual saves fail
+    // to avoid partial data loss
     for (uint8_t sensor_index = 0; sensor_index < ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS;
          sensor_index++) {
         for (uint8_t layer = 0; layer < ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS; layer++) {
