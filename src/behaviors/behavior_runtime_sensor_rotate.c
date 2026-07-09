@@ -71,13 +71,23 @@ BUILD_ASSERT(sizeof(struct runtime_sensor_rotate_layer_bindings) <=
                  CONFIG_ZMK_CUSTOM_SETTINGS_VALUE_MAX_SIZE,
              "layer_bindings must fit one custom-settings array element");
 
+/* Only register the storage when the keymap actually has sensors. With no
+ * sensors ZMK_KEYMAP_SENSORS_LEN is 0, so RSR_GRID_SIZE is 0 and both the
+ * zero-length defaults array and a 0-element array setting are meaningless
+ * (and the range initializer below would underflow). The get/set entry points
+ * short-circuit via their `sensor_index >= MAX_SENSORS` bounds check (always
+ * true when MAX_SENSORS == 0), so they never reach the storage in that case. */
+#if ZMK_KEYMAP_HAS_SENSORS
+
 /* All slots default to empty BYTES (size 0) -> get_bindings sees
  * behavior_local_id==0 -> DT default-binding fallback applies, exactly as
- * today. Built with LISTIFY since a plain {0}-init would leave type==0, an
- * invalid value type. */
-#define RSR_EMPTY_BYTES(i, _) {.type = ZMK_CUSTOM_SETTING_VALUE_TYPE_BYTES, .size = 0}
+ * today. A range designator (not LISTIFY) is used because RSR_GRID_SIZE is a
+ * product expression, which LISTIFY cannot token-paste as an element count;
+ * the range bound is evaluated normally. A plain {0}-init would leave
+ * type==0, an invalid value type. */
 static const struct zmk_custom_setting_value rsr_binding_defaults[RSR_GRID_SIZE] = {
-    LISTIFY(RSR_GRID_SIZE, RSR_EMPTY_BYTES, (, ))};
+    [0 ... RSR_GRID_SIZE - 1] = {.type = ZMK_CUSTOM_SETTING_VALUE_TYPE_BYTES, .size = 0},
+};
 
 ZMK_CUSTOM_SETTING_ARRAY_DEFINE(rsr_bindings, RSR_SUBSYS, RSR_BINDINGS_KEY,
                                 ZMK_CUSTOM_SETTING_VALUE_TYPE_BYTES, RSR_GRID_SIZE, RSR_GRID_SIZE,
@@ -85,6 +95,8 @@ ZMK_CUSTOM_SETTING_ARRAY_DEFINE(rsr_bindings, RSR_SUBSYS, RSR_BINDINGS_KEY,
                                 ZMK_CUSTOM_SETTING_PERMISSION_UNSECURE,
                                 ZMK_CUSTOM_SETTING_PERMISSION_UNSECURE,
                                 ZMK_CUSTOM_SETTING_NO_CONSTRAINT);
+
+#endif /* ZMK_KEYMAP_HAS_SENSORS */
 
 // The grid is pre-sized to RSR_GRID_SIZE, so every (sensor, layer) slot is
 // active from boot and this is a plain random-access index (no push_back /

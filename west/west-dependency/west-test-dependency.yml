@@ -8,7 +8,12 @@ manifest:
   projects:
     - name: zmk
       remote: cormoran
-      revision: v0.3-branch+custom-studio-protocol
+      # Bumped from v0.3-branch+custom-studio-protocol (Zephyr 3.5) to align with
+      # every other custom-settings consumer (runtime-macro/combo, template). The
+      # older base predates `configdefault` (Kconfig) and
+      # zephyr_linker_sources(ROM_SECTIONS ...) which zmk-feature-custom-settings
+      # requires unconditionally, so custom-settings cannot configure on 3.5.
+      revision: main+custom-studio-protocol
       import:
         file: app/west.yml
       clone-depth: 1
@@ -18,6 +23,4 @@ manifest:
       import: true
     - name: zmk-feature-custom-settings
       remote: cormoran
-      # TODO: revert to `main` once cormoran/zmk-feature-custom-settings#41
-      # (public zmk_custom_settings_notify_suppress_begin/end) merges.
-      revision: feat/public-notify-suppress
+      revision: main
