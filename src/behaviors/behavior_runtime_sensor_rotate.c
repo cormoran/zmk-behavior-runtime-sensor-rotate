@@ -10,7 +10,7 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
-#include <zephyr/settings/settings.h>
+#include <zephyr/sys/util.h>
 
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
@@ -20,6 +20,8 @@
 #include <zmk/virtual_key_position.h>
 #include <zmk/events/position_state_changed.h>
 #include <zmk/behaviors/runtime_sensor_rotate.h>
+
+#include <cormoran/zmk/custom_settings.h>
 
 #include <string.h>
 
@@ -35,8 +37,6 @@ struct behavior_runtime_sensor_rotate_config {
 struct behavior_runtime_sensor_rotate_data {
     struct sensor_value remainder[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS][ZMK_KEYMAP_LAYERS_LEN];
     int triggers[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS][ZMK_KEYMAP_LAYERS_LEN];
-    struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS]
-                                                        [ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
     bool data_accepted[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS][ZMK_KEYMAP_LAYERS_LEN];
 };
 
@@ -61,60 +61,41 @@ static const char *global_default_behavior_dev[ZMK_KEYMAP_LAYERS_LEN][ZMK_KEYMAP
     DT_FOREACH_CHILD_SEP(DT_INST(0, zmk_keymap), SENSOR_LAYER, (, ))};
 #endif
 
-// Settings storage key
-#define SETTINGS_KEY "rsr"
+// Custom-settings storage: one BYTES array element per (sensor, layer) slot,
+// holding a `struct runtime_sensor_rotate_layer_bindings` memcpy'd verbatim.
+#define RSR_SUBSYS "rsr"
+#define RSR_BINDINGS_KEY "bindings"
+#define RSR_GRID_SIZE (ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS * ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS)
 
-static int settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg) {
-    int rc;
-    int sensor_index, layer;
+BUILD_ASSERT(sizeof(struct runtime_sensor_rotate_layer_bindings) <=
+                 CONFIG_ZMK_CUSTOM_SETTINGS_VALUE_MAX_SIZE,
+             "layer_bindings must fit one custom-settings array element");
 
-    // Parse key format: s<sensor_index>/l<layer>
-    // Example: "s0/l1" for sensor 0, layer 1
-    if (sscanf(name, "s%d/l%d", &sensor_index, &layer) == 2) {
-        if (sensor_index < 0 || sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
-            LOG_WRN("Invalid sensor index in settings: %d", sensor_index);
-            return -EINVAL;
-        }
-        if (layer < 0 || layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
-            LOG_WRN("Invalid layer in settings: %d", layer);
-            return -EINVAL;
-        }
+/* All slots default to empty BYTES (size 0) -> get_bindings sees
+ * behavior_local_id==0 -> DT default-binding fallback applies, exactly as
+ * today. Built with LISTIFY since a plain {0}-init would leave type==0, an
+ * invalid value type. */
+#define RSR_EMPTY_BYTES(i, _) {.type = ZMK_CUSTOM_SETTING_VALUE_TYPE_BYTES, .size = 0}
+static const struct zmk_custom_setting_value rsr_binding_defaults[RSR_GRID_SIZE] = {
+    LISTIFY(RSR_GRID_SIZE, RSR_EMPTY_BYTES, (, ))};
 
-        if (len != sizeof(struct runtime_sensor_rotate_layer_bindings)) {
-            LOG_ERR("Invalid settings data size for s%d/l%d: %d vs %d", sensor_index, layer, len,
-                    sizeof(struct runtime_sensor_rotate_layer_bindings));
-            return -EINVAL;
-        }
+ZMK_CUSTOM_SETTING_ARRAY_DEFINE(rsr_bindings, RSR_SUBSYS, RSR_BINDINGS_KEY,
+                                ZMK_CUSTOM_SETTING_VALUE_TYPE_BYTES, RSR_GRID_SIZE, RSR_GRID_SIZE,
+                                rsr_binding_defaults, ZMK_CUSTOM_SETTING_CONFIDENTIALITY_RPC_PUBLIC,
+                                ZMK_CUSTOM_SETTING_PERMISSION_UNSECURE,
+                                ZMK_CUSTOM_SETTING_PERMISSION_UNSECURE,
+                                ZMK_CUSTOM_SETTING_NO_CONSTRAINT);
 
-        rc = read_cb(cb_arg, &global_data.bindings[sensor_index][layer],
-                     sizeof(struct runtime_sensor_rotate_layer_bindings));
-        if (rc < 0) {
-            LOG_ERR("Failed to read settings for s%d/l%d: %d", sensor_index, layer, rc);
-            return rc;
-        }
-
-        LOG_DBG("Loaded bindings for sensor %d layer %d", sensor_index, layer);
-        return 0;
-    }
-
-    return -ENOENT;
+// The grid is pre-sized to RSR_GRID_SIZE, so every (sensor, layer) slot is
+// active from boot and this is a plain random-access index (no push_back /
+// active-size bookkeeping needed).
+static inline uint32_t rsr_binding_index(uint8_t sensor_index, uint8_t layer) {
+    return sensor_index * ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS + layer;
 }
-
-SETTINGS_STATIC_HANDLER_DEFINE(behavior_runtime_sensor_rotate, SETTINGS_KEY, NULL, settings_set,
-                               NULL, NULL);
 
 int zmk_runtime_sensor_rotate_get_layer_bindings(
     uint8_t sensor_index, uint8_t layer, struct runtime_sensor_rotate_layer_bindings *bindings) {
-
-    if (sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
-        return -EINVAL;
-    }
-    if (layer >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
-        return -EINVAL;
-    }
-
-    *bindings = global_data.bindings[sensor_index][layer];
-    return 0;
+    return zmk_runtime_sensor_rotate_get_bindings(sensor_index, layer, bindings);
 }
 
 int zmk_runtime_sensor_rotate_set_layer_bindings(
@@ -128,14 +109,15 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
         return -EINVAL;
     }
 
-    global_data.bindings[sensor_index][layer] = *bindings;
+    struct zmk_custom_setting_value value = {
+        .type = ZMK_CUSTOM_SETTING_VALUE_TYPE_BYTES,
+        .size = sizeof(*bindings),
+    };
+    memcpy(value.bytes_value, bindings, sizeof(*bindings));
 
-    // Save to settings with per-sensor, per-layer key
-    char key[32];
-    snprintf(key, sizeof(key), SETTINGS_KEY "/s%d/l%d", sensor_index, layer);
-
-    int rc = settings_save_one(key, &global_data.bindings[sensor_index][layer],
-                               sizeof(struct runtime_sensor_rotate_layer_bindings));
+    int rc = zmk_custom_setting_write_array_by_key(RSR_SUBSYS, RSR_BINDINGS_KEY,
+                                                   rsr_binding_index(sensor_index, layer), &value,
+                                                   ZMK_CUSTOM_SETTING_WRITE_MODE_PERSIST);
     if (rc != 0) {
         LOG_ERR("Failed to save settings for sensor %d layer %d: %d", sensor_index, layer, rc);
         return rc;
@@ -178,8 +160,17 @@ int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_i
     if (layer_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS) {
         return -EINVAL;
     }
+
     // set from runtime first
-    *out = global_data.bindings[sensor_index][layer_index];
+    struct zmk_custom_setting_value value;
+    int rc = zmk_custom_setting_read_array_by_key(
+        RSR_SUBSYS, RSR_BINDINGS_KEY, rsr_binding_index(sensor_index, layer_index), &value);
+    if (rc == 0 && value.size == sizeof(*out)) {
+        memcpy(out, value.bytes_value, sizeof(*out));
+    } else {
+        memset(out, 0, sizeof(*out));
+    }
+
     // If not set, fill from default
     if (out->cw_binding.behavior_local_id == 0 || out->ccw_binding.behavior_local_id == 0) {
 #if ZMK_KEYMAP_HAS_SENSORS
@@ -295,12 +286,15 @@ static int behavior_runtime_sensor_rotate_process(struct zmk_behavior_binding *b
         return ZMK_BEHAVIOR_TRANSPARENT;
     }
 
+    struct runtime_sensor_rotate_layer_bindings layer_bindings;
+    zmk_runtime_sensor_rotate_get_bindings(sensor_index, event.layer, &layer_bindings);
+
     struct runtime_sensor_rotate_binding triggered_binding_data;
     // Check runtime bindings
     if (triggers > 0) {
-        triggered_binding_data = global_data.bindings[sensor_index][event.layer].cw_binding;
+        triggered_binding_data = layer_bindings.cw_binding;
     } else if (triggers < 0) {
-        triggered_binding_data = global_data.bindings[sensor_index][event.layer].ccw_binding;
+        triggered_binding_data = layer_bindings.ccw_binding;
     } else {
         return ZMK_BEHAVIOR_TRANSPARENT;
     }

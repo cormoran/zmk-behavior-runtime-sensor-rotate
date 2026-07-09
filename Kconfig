@@ -1,11 +1,18 @@
 config ZMK_RUNTIME_SENSOR_ROTATE
     bool "Enable runtime sensor rotate feature"
+    select ZMK_CUSTOM_SETTINGS
+    select ZMK_CUSTOM_SETTINGS_ARRAY
+    select ZMK_BEHAVIOR_LOCAL_IDS
 
 if ZMK_RUNTIME_SENSOR_ROTATE
+
+configdefault MAIN_STACK_SIZE
+    default 2048
 
 config ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
     bool "Enable runtime sensor rotate custom Studio RPC"
     default y
     depends on ZMK_STUDIO
+    select ZMK_CUSTOM_SETTINGS_STUDIO_RPC
 
 endif

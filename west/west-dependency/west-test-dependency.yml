@@ -16,3 +16,8 @@ manifest:
       remote: cormoran
       revision: main
       import: true
+    - name: zmk-feature-custom-settings
+      remote: cormoran
+      # TODO: revert to `main` once cormoran/zmk-feature-custom-settings#41
+      # (public zmk_custom_settings_notify_suppress_begin/end) merges.
+      revision: feat/public-notify-suppress

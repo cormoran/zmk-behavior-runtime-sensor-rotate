@@ -12,6 +12,7 @@
 #include <zmk/behaviors/runtime_sensor_rotate.h>
 #include <zmk/behavior.h>
 #include <zmk/sensors.h>
+#include <cormoran/zmk/custom_settings.h>
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -71,6 +72,13 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
     }
 
     int rc = 0;
+    // This handler mutates custom-settings (e.g. set_layer_cw/ccw_binding)
+    // from inside its own RPC dispatch. Suppress self-notifications while
+    // dispatching, else the synchronous setting-changed Studio notification
+    // starves/overflows the in-flight response on the RPC thread (issue #38,
+    // hardware-confirmed). No-op unless CONFIG_ZMK_CUSTOM_SETTINGS_STUDIO_RPC
+    // is built.
+    zmk_custom_settings_notify_suppress_begin();
     switch (req.which_request_type) {
     case cormoran_rsr_Request_set_layer_cw_binding_tag:
         rc = handle_set_layer_cw_binding(&req.request_type.set_layer_cw_binding, resp);
@@ -88,6 +96,7 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
         LOG_WRN("Unsupported template request type: %d", req.which_request_type);
         rc = -1;
     }
+    zmk_custom_settings_notify_suppress_end();
 
     if (rc != 0) {
         cormoran_rsr_ErrorResponse err = cormoran_rsr_ErrorResponse_init_zero;

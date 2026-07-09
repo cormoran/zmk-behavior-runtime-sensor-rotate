@@ -1,9 +1,11 @@
 # List of this module's dependencies
 manifest:
-  # remotes:
-  #   - name: remote-name
-  #     url-base: https://github.com/remote-name
-  # projects:
-  #   - name: repository-name
-  #     remote: remote-name
-  #     revision: branch-or-tag-name
+  remotes:
+    - name: cormoran
+      url-base: https://github.com/cormoran
+  projects:
+    - name: zmk-feature-custom-settings
+      remote: cormoran
+      # TODO: revert to `main` once cormoran/zmk-feature-custom-settings#41
+      # (public zmk_custom_settings_notify_suppress_begin/end) merges.
+      revision: feat/public-notify-suppress
