@@ -174,7 +174,11 @@ See the test files in `./test/` for complete examples.
 
 2. Open the web UI in a browser that supports WebSerial/WebBluetooth (Chrome, Edge)
 
-3. Click "Connect Serial" or "Connect BLE" to connect to your keyboard
+3. Click "Connect USB" or "Connect Bluetooth" to connect to your keyboard
+   (only the buttons for transports your browser actually supports are shown).
+   A previously-connected USB device reconnects automatically on page load.
+   If ZMK Studio is locked, the sensor rotate panel shows an unlock prompt and
+   retries automatically once you press the `&studio_unlock` behavior.
 
 ### Configuring Bindings
 

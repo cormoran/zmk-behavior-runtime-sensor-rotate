@@ -169,6 +169,39 @@
   width: 150px;
 }
 
+.connect-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.hint-message {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.locked-banner {
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  background: #fff8e1;
+  border: 1px solid #ffca28;
+  border-radius: 6px;
+  color: #8a6100;
+}
+
+.locked-banner p {
+  margin: 0;
+}
+
+.unlock-prompt {
+  margin-top: 1rem;
+}
+
+.unlock-prompt p {
+  margin-top: 0;
+}
+
 .response-box {
   margin-top: 1rem;
   padding: 1rem;
@@ -242,6 +275,12 @@
   margin: 0;
 }
 
+.app-footer .template-credit {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #999;
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .app {
@@ -309,6 +348,16 @@
     color: #fff;
   }
 
+  .hint-message {
+    color: #aaa;
+  }
+
+  .locked-banner {
+    background: #3d3316;
+    border-color: #6b5a1f;
+    color: #ffd54f;
+  }
+
   .response-box {
     background: #333;
     border-color: #555;
@@ -347,5 +396,9 @@
   .app-footer {
     border-top-color: #444;
     color: #aaa;
+  }
+
+  .template-credit {
+    color: #888;
   }
 }

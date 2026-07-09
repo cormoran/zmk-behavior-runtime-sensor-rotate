@@ -7,6 +7,8 @@ import { useContext, useState, useEffect, useCallback, useMemo } from "react";
 import {
   ZMKAppContext,
   ZMKCustomSubsystem,
+  useStudioLockState,
+  isUnlockRequiredError,
 } from "@cormoran/zmk-studio-react-hook";
 import {
   Request,
@@ -30,6 +32,16 @@ export function RuntimeSensorRotateConfig() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The cormoran_rsr custom RPCs (getSensors / getAllLayerBindings /
+  // setLayerCwBinding / setLayerCcwBinding) are registered SECURED in
+  // firmware, so they reject with an UNLOCK_REQUIRED meta error while ZMK
+  // Studio is locked. Track that state so the UI can show a banner instead
+  // of the request just failing silently, and automatically retry once the
+  // user unlocks (mirroring the template's RPCTestSection).
+  const { locked } = useStudioLockState();
+  const [awaitingUnlock, setAwaitingUnlock] = useState(false);
+  const [pendingRetry, setPendingRetry] = useState<(() => void) | null>(null);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const subsystem = useMemo(
     () => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER),
@@ -38,36 +50,41 @@ export function RuntimeSensorRotateConfig() {
   );
 
   // Load available sensors
-  useEffect(() => {
-    const loadSensors = async () => {
-      if (!zmkApp?.state.connection || !subsystem) return;
-      try {
-        const service = new ZMKCustomSubsystem(
-          zmkApp.state.connection,
-          subsystem.index
-        );
+  const loadSensors = useCallback(async () => {
+    if (!zmkApp?.state.connection || !subsystem) return;
+    try {
+      const service = new ZMKCustomSubsystem(
+        zmkApp.state.connection,
+        subsystem.index
+      );
 
-        const request = Request.create({
-          getSensors: {},
-        });
+      const request = Request.create({
+        getSensors: {},
+      });
 
-        const payload = Request.encode(request).finish();
-        const responsePayload = await service.callRPC(payload);
+      const payload = Request.encode(request).finish();
+      const responsePayload = await service.callRPC(payload);
 
-        if (responsePayload) {
-          const resp = Response.decode(responsePayload);
+      if (responsePayload) {
+        const resp = Response.decode(responsePayload);
 
-          if (resp.getSensors) {
-            setSensors(resp.getSensors.sensors || []);
-          }
+        if (resp.getSensors) {
+          setSensors(resp.getSensors.sensors || []);
         }
-      } catch (err) {
-        console.error("Failed to load sensors:", err);
       }
-    };
-
-    loadSensors();
+    } catch (err) {
+      if (isUnlockRequiredError(err)) {
+        setAwaitingUnlock(true);
+        setPendingRetry(() => () => void loadSensors());
+        return;
+      }
+      console.error("Failed to load sensors:", err);
+    }
   }, [zmkApp?.state.connection, subsystem]);
+
+  useEffect(() => {
+    void loadSensors();
+  }, [loadSensors]);
 
   // Load available behaviors from ZMK Studio
   useEffect(() => {
@@ -141,6 +158,11 @@ export function RuntimeSensorRotateConfig() {
         }
       }
     } catch (err) {
+      if (isUnlockRequiredError(err)) {
+        setAwaitingUnlock(true);
+        setPendingRetry(() => () => void loadAllLayerBindings());
+        return;
+      }
       console.error("Failed to load layer bindings:", err);
       setError(
         `Failed to load: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -187,6 +209,13 @@ export function RuntimeSensorRotateConfig() {
           }
         }
       } catch (err) {
+        if (isUnlockRequiredError(err)) {
+          setAwaitingUnlock(true);
+          setPendingRetry(
+            () => () => void saveLayerCwBindings(layer, cwBinding, reload)
+          );
+          return;
+        }
         console.error("Failed to save layer bindings:", err);
         setError(
           `Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -235,6 +264,13 @@ export function RuntimeSensorRotateConfig() {
           }
         }
       } catch (err) {
+        if (isUnlockRequiredError(err)) {
+          setAwaitingUnlock(true);
+          setPendingRetry(
+            () => () => void saveLayerCcwBindings(layer, ccwBinding, reload)
+          );
+          return;
+        }
         console.error("Failed to save layer bindings:", err);
         setError(
           `Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -254,6 +290,24 @@ export function RuntimeSensorRotateConfig() {
     },
     [saveLayerCwBindings, saveLayerCcwBindings]
   );
+
+  // Auto-retry once the device reports it's unlocked again -- covers the
+  // common case where the user presses &studio_unlock after seeing the
+  // prompt below without needing to click "Retry" themselves.
+  useEffect(() => {
+    if (awaitingUnlock && !locked && pendingRetry) {
+      // This mirrors an external system (the device's lock state) rather
+      // than deriving from props/state, so a direct setState here is
+      // intentional -- see react-hooks/set-state-in-effect's rationale (same
+      // pattern used by useStudioLockState itself).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAwaitingUnlock(false);
+      const retry = pendingRetry;
+      setPendingRetry(null);
+      retry();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked]);
 
   if (!zmkApp) return null;
 
@@ -276,6 +330,12 @@ export function RuntimeSensorRotateConfig() {
       <p>
         Configure sensor rotation bindings per layer with persistent storage.
       </p>
+
+      {locked && (
+        <div className="locked-banner">
+          <p>🔒 ZMK Studio is locked.</p>
+        </div>
+      )}
 
       <div className="input-group">
         <label htmlFor="sensor-select">Sensor:</label>
@@ -301,7 +361,7 @@ export function RuntimeSensorRotateConfig() {
 
       <button
         className="btn btn-primary"
-        disabled={isLoading}
+        disabled={isLoading || locked}
         onClick={loadAllLayerBindings}
       >
         {isLoading ? "⏳ Loading..." : "📥 Load Configuration"}
@@ -310,6 +370,22 @@ export function RuntimeSensorRotateConfig() {
       {error && (
         <div className="error-message">
           <p>🚨 {error}</p>
+        </div>
+      )}
+
+      {awaitingUnlock && (
+        <div className="unlock-prompt card">
+          <p>
+            🔒 ZMK Studio is locked. Press the unlock key (
+            <code>&amp;studio_unlock</code> behavior) on your keyboard — the
+            request will retry automatically.
+          </p>
+          <button
+            className="btn btn-secondary"
+            onClick={() => pendingRetry?.()}
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -339,6 +415,7 @@ export function RuntimeSensorRotateConfig() {
               behaviors={behaviors}
               onSave={saveLayerBindings}
               isLoading={isLoading}
+              locked={locked}
             />
           )}
         </div>
@@ -353,6 +430,7 @@ interface LayerBindingEditorProps {
   behaviors: GetBehaviorDetailsResponse[];
   onSave: (layer: number, cwBinding: Binding, ccwBinding: Binding) => void;
   isLoading: boolean;
+  locked: boolean;
 }
 
 function LayerBindingEditor({
@@ -361,6 +439,7 @@ function LayerBindingEditor({
   behaviors,
   onSave,
   isLoading,
+  locked,
 }: LayerBindingEditorProps) {
   const [cwBehaviorId, setCwBehaviorId] = useState(
     bindings.cwBinding?.behaviorId || 0
@@ -494,7 +573,7 @@ function LayerBindingEditor({
 
       <button
         className="btn btn-primary"
-        disabled={isLoading}
+        disabled={isLoading || locked}
         onClick={handleSave}
       >
         {isLoading ? "⏳ Saving..." : "💾 Save Bindings"}
