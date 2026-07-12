@@ -6,9 +6,6 @@ config ZMK_RUNTIME_SENSOR_ROTATE
 
 if ZMK_RUNTIME_SENSOR_ROTATE
 
-configdefault MAIN_STACK_SIZE
-    default 2048
-
 config ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
     bool "Enable runtime sensor rotate custom Studio RPC"
     default y

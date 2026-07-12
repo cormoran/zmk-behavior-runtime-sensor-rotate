@@ -153,14 +153,14 @@ config ZMK_RUNTIME_SENSOR_ROTATE_STUDIO_RPC
 endif
 ```
 
-Also add, at module scope (custom-settings' settings-load path runs on the main thread and
-overflowed the default 1024 B `MAIN_STACK_SIZE` on real hardware — see custom-settings
-project notes):
-
-```
-configdefault MAIN_STACK_SIZE
-    default 2048
-```
+No `MAIN_STACK_SIZE` change is needed here. `zmk-feature-custom-settings` already raises it
+via its own `configdefault MAIN_STACK_SIZE default 2048` (inside `if ZMK_CUSTOM_SETTINGS`),
+because Zephyr's `settings_load()` runs on the main thread at boot and its load path
+(blob decode / keyspace bind) overflowed the bare 1024 B default on real hardware. Since
+this module `select`s `ZMK_CUSTOM_SETTINGS`, that default is inherited automatically — this
+is a boot-time settings-load concern on the main thread, unrelated to the Studio RPC
+protobuf encode/decode (which runs on the RPC thread), so it cannot be avoided by moving
+proto work to another thread.
 
 `west/west-dependency/west-dependency.yml` — add the runtime dependency so dependents pull
 it in. Pin to the notify-suppress branch until PR #41 merges (mirror runtime-macro):
