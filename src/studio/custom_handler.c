@@ -46,6 +46,8 @@ static int handle_get_all_layer_bindings(const cormoran_rsr_GetAllLayerBindingsR
                                          cormoran_rsr_Response *resp);
 static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
                               cormoran_rsr_Response *resp);
+static int handle_save_pending_changes(const cormoran_rsr_SavePendingChangesRequest *req,
+                                       cormoran_rsr_Response *resp);
 
 /**
  * Main request handler for the custom RPC subsystem.
@@ -83,6 +85,9 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
         break;
     case cormoran_rsr_Request_get_sensors_tag:
         rc = handle_get_sensors(&req.request_type.get_sensors, resp);
+        break;
+    case cormoran_rsr_Request_save_pending_changes_tag:
+        rc = handle_save_pending_changes(&req.request_type.save_pending_changes, resp);
         break;
     default:
         LOG_WRN("Unsupported template request type: %d", req.which_request_type);
@@ -123,11 +128,13 @@ static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingReque
     binding.cw_binding.param2 = req->binding.param2;
     binding.cw_binding.tap_ms = req->binding.tap_ms;
 
-    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding,
+                                                      req->skip_save);
 
     cormoran_rsr_SetLayerCwBindingResponse result =
         cormoran_rsr_SetLayerCwBindingResponse_init_zero;
     result.success = (rc == 0);
+    result.has_pending_changes = zmk_runtime_sensor_rotate_has_pending_changes();
 
     resp->which_response_type = cormoran_rsr_Response_set_layer_cw_binding_tag;
     resp->response_type.set_layer_cw_binding = result;
@@ -159,11 +166,13 @@ static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingReq
     binding.ccw_binding.param2 = req->binding.param2;
     binding.ccw_binding.tap_ms = req->binding.tap_ms;
 
-    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding,
+                                                      req->skip_save);
 
     cormoran_rsr_SetLayerCcwBindingResponse result =
         cormoran_rsr_SetLayerCcwBindingResponse_init_zero;
     result.success = (rc == 0);
+    result.has_pending_changes = zmk_runtime_sensor_rotate_has_pending_changes();
 
     resp->which_response_type = cormoran_rsr_Response_set_layer_ccw_binding_tag;
     resp->response_type.set_layer_ccw_binding = result;
@@ -208,6 +217,8 @@ static int handle_get_all_layer_bindings(const cormoran_rsr_GetAllLayerBindingsR
 
     resp->which_response_type = cormoran_rsr_Response_get_all_layer_bindings_tag;
     resp->response_type.get_all_layer_bindings = result;
+    resp->response_type.get_all_layer_bindings.has_pending_changes =
+        zmk_runtime_sensor_rotate_has_pending_changes();
     return 0;
 }
 
@@ -240,4 +251,19 @@ static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
     resp->which_response_type = cormoran_rsr_Response_get_sensors_tag;
     resp->response_type.get_sensors = result;
     return 0;
+}
+
+static int handle_save_pending_changes(const cormoran_rsr_SavePendingChangesRequest *req,
+                                       cormoran_rsr_Response *resp) {
+    LOG_DBG("Save pending changes");
+
+    int rc = zmk_runtime_sensor_rotate_save_pending_changes();
+
+    cormoran_rsr_SavePendingChangesResponse result =
+        cormoran_rsr_SavePendingChangesResponse_init_zero;
+    result.success = (rc == 0);
+
+    resp->which_response_type = cormoran_rsr_Response_save_pending_changes_tag;
+    resp->response_type.save_pending_changes = result;
+    return rc;
 }

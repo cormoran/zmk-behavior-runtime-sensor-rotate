@@ -33,10 +33,14 @@ int zmk_runtime_sensor_rotate_get_layer_bindings(
 
 /**
  * Set the layer bindings for a specific sensor and layer
+ * @param sensor_index Sensor index
+ * @param layer Layer index
+ * @param bindings Bindings to set
+ * @param skip_save If true, updates runtime but doesn't save to flash
  */
 int zmk_runtime_sensor_rotate_set_layer_bindings(
     uint8_t sensor_index, uint8_t layer,
-    const struct runtime_sensor_rotate_layer_bindings *bindings);
+    const struct runtime_sensor_rotate_layer_bindings *bindings, bool skip_save);
 
 /**
  * Get the layer bindings for a specific sensor and layer
@@ -50,3 +54,13 @@ int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_i
 int zmk_runtime_sensor_rotate_get_all_layer_bindings(
     uint8_t sensor_index, uint8_t max_layers,
     struct runtime_sensor_rotate_layer_bindings *bindings_array, uint8_t *actual_layers);
+
+/**
+ * Check if there are pending changes that haven't been saved to flash
+ */
+bool zmk_runtime_sensor_rotate_has_pending_changes(void);
+
+/**
+ * Save all pending changes to flash
+ */
+int zmk_runtime_sensor_rotate_save_pending_changes(void);

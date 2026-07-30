@@ -38,6 +38,9 @@ struct behavior_runtime_sensor_rotate_data {
     struct runtime_sensor_rotate_layer_bindings bindings[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS]
                                                         [ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
     bool data_accepted[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS][ZMK_KEYMAP_LAYERS_LEN];
+    // Track which bindings have pending changes (not saved to flash)
+    bool pending_changes[ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS]
+                        [ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS];
 };
 
 static struct behavior_runtime_sensor_rotate_data global_data = {};
@@ -119,7 +122,7 @@ int zmk_runtime_sensor_rotate_get_layer_bindings(
 
 int zmk_runtime_sensor_rotate_set_layer_bindings(
     uint8_t sensor_index, uint8_t layer,
-    const struct runtime_sensor_rotate_layer_bindings *bindings) {
+    const struct runtime_sensor_rotate_layer_bindings *bindings, bool skip_save) {
 
     if (sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
         return -EINVAL;
@@ -129,6 +132,13 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
     }
 
     global_data.bindings[sensor_index][layer] = *bindings;
+
+    if (skip_save) {
+        // Mark as pending change without saving to flash
+        global_data.pending_changes[sensor_index][layer] = true;
+        LOG_DBG("Marked bindings as pending for sensor %d layer %d", sensor_index, layer);
+        return 0;
+    }
 
     // Save to settings with per-sensor, per-layer key
     char key[32];
@@ -140,6 +150,9 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
         LOG_ERR("Failed to save settings for sensor %d layer %d: %d", sensor_index, layer, rc);
         return rc;
     }
+
+    // Clear pending change flag on successful save
+    global_data.pending_changes[sensor_index][layer] = false;
 
     LOG_DBG("Saved bindings (local_id=%d) for sensor %d layer %d",
             bindings->cw_binding.behavior_local_id, sensor_index, layer);
@@ -168,6 +181,56 @@ int zmk_runtime_sensor_rotate_get_all_layer_bindings(
     }
 
     return 0;
+}
+
+bool zmk_runtime_sensor_rotate_has_pending_changes(void) {
+    for (uint8_t sensor_index = 0; sensor_index < ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS;
+         sensor_index++) {
+        for (uint8_t layer = 0; layer < ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS; layer++) {
+            if (global_data.pending_changes[sensor_index][layer]) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int zmk_runtime_sensor_rotate_save_pending_changes(void) {
+    int rc = 0;
+    int saved_count = 0;
+
+    // Save all pending changes, continuing even if individual saves fail
+    // to avoid partial data loss
+    for (uint8_t sensor_index = 0; sensor_index < ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS;
+         sensor_index++) {
+        for (uint8_t layer = 0; layer < ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS; layer++) {
+            if (global_data.pending_changes[sensor_index][layer]) {
+                char key[32];
+                snprintf(key, sizeof(key), SETTINGS_KEY "/s%d/l%d", sensor_index, layer);
+
+                int save_rc =
+                    settings_save_one(key, &global_data.bindings[sensor_index][layer],
+                                      sizeof(struct runtime_sensor_rotate_layer_bindings));
+                if (save_rc != 0) {
+                    LOG_ERR("Failed to save pending changes for sensor %d layer %d: %d",
+                            sensor_index, layer, save_rc);
+                    rc = save_rc; // Keep track of last error
+                } else {
+                    global_data.pending_changes[sensor_index][layer] = false;
+                    saved_count++;
+                    LOG_DBG("Saved pending changes for sensor %d layer %d", sensor_index, layer);
+                }
+            }
+        }
+    }
+
+    if (rc == 0) {
+        LOG_INF("Successfully saved %d pending change(s)", saved_count);
+    } else {
+        LOG_WRN("Saved %d pending change(s) with errors", saved_count);
+    }
+
+    return rc;
 }
 
 int zmk_runtime_sensor_rotate_get_bindings(uint8_t sensor_index, uint8_t layer_index,
