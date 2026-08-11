@@ -12,6 +12,7 @@
 #include <zmk/behaviors/runtime_sensor_rotate.h>
 #include <zmk/behavior.h>
 #include <zmk/sensors.h>
+#include <cormoran/zmk/custom_settings.h>
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -38,6 +39,17 @@ ZMK_RPC_CUSTOM_SUBSYSTEM(cormoran_rsr, &template_feature_meta, template_rpc_hand
 
 ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(cormoran_rsr, cormoran_rsr_Response);
 
+static enum zmk_runtime_sensor_rotate_write_mode rsr_write_mode(cormoran_rsr_WriteMode mode) {
+    switch (mode) {
+    case cormoran_rsr_WriteMode_WRITE_MODE_MEMORY:
+        return ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_MEMORY;
+    case cormoran_rsr_WriteMode_WRITE_MODE_TEMPORARY:
+        return ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_TEMPORARY;
+    default:
+        return ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_PERSIST;
+    }
+}
+
 static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingRequest *req,
                                        cormoran_rsr_Response *resp);
 static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingRequest *req,
@@ -46,6 +58,12 @@ static int handle_get_all_layer_bindings(const cormoran_rsr_GetAllLayerBindingsR
                                          cormoran_rsr_Response *resp);
 static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
                               cormoran_rsr_Response *resp);
+static int handle_save_all_settings(const cormoran_rsr_SaveAllSettingsRequest *req,
+                                    cormoran_rsr_Response *resp);
+static int handle_discard_all_settings(const cormoran_rsr_DiscardAllSettingsRequest *req,
+                                       cormoran_rsr_Response *resp);
+static int handle_reset_all_settings(const cormoran_rsr_ResetAllSettingsRequest *req,
+                                     cormoran_rsr_Response *resp);
 
 /**
  * Main request handler for the custom RPC subsystem.
@@ -71,6 +89,13 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
     }
 
     int rc = 0;
+    // This handler mutates custom-settings (e.g. set_layer_cw/ccw_binding)
+    // from inside its own RPC dispatch. Suppress self-notifications while
+    // dispatching, else the synchronous setting-changed Studio notification
+    // starves/overflows the in-flight response on the RPC thread (issue #38,
+    // hardware-confirmed). No-op unless CONFIG_ZMK_CUSTOM_SETTINGS_STUDIO_RPC
+    // is built.
+    zmk_custom_settings_notify_suppress_begin();
     switch (req.which_request_type) {
     case cormoran_rsr_Request_set_layer_cw_binding_tag:
         rc = handle_set_layer_cw_binding(&req.request_type.set_layer_cw_binding, resp);
@@ -84,10 +109,20 @@ static bool template_rpc_handle_request(const zmk_custom_CallRequest *raw_reques
     case cormoran_rsr_Request_get_sensors_tag:
         rc = handle_get_sensors(&req.request_type.get_sensors, resp);
         break;
+    case cormoran_rsr_Request_save_all_settings_tag:
+        rc = handle_save_all_settings(&req.request_type.save_all_settings, resp);
+        break;
+    case cormoran_rsr_Request_discard_all_settings_tag:
+        rc = handle_discard_all_settings(&req.request_type.discard_all_settings, resp);
+        break;
+    case cormoran_rsr_Request_reset_all_settings_tag:
+        rc = handle_reset_all_settings(&req.request_type.reset_all_settings, resp);
+        break;
     default:
         LOG_WRN("Unsupported template request type: %d", req.which_request_type);
         rc = -1;
     }
+    zmk_custom_settings_notify_suppress_end();
 
     if (rc != 0) {
         cormoran_rsr_ErrorResponse err = cormoran_rsr_ErrorResponse_init_zero;
@@ -123,7 +158,8 @@ static int handle_set_layer_cw_binding(const cormoran_rsr_SetLayerCwBindingReque
     binding.cw_binding.param2 = req->binding.param2;
     binding.cw_binding.tap_ms = req->binding.tap_ms;
 
-    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings_with_mode(
+        req->sensor_index, req->layer, &binding, rsr_write_mode(req->write_mode));
 
     cormoran_rsr_SetLayerCwBindingResponse result =
         cormoran_rsr_SetLayerCwBindingResponse_init_zero;
@@ -159,7 +195,8 @@ static int handle_set_layer_ccw_binding(const cormoran_rsr_SetLayerCcwBindingReq
     binding.ccw_binding.param2 = req->binding.param2;
     binding.ccw_binding.tap_ms = req->binding.tap_ms;
 
-    rc = zmk_runtime_sensor_rotate_set_layer_bindings(req->sensor_index, req->layer, &binding);
+    rc = zmk_runtime_sensor_rotate_set_layer_bindings_with_mode(
+        req->sensor_index, req->layer, &binding, rsr_write_mode(req->write_mode));
 
     cormoran_rsr_SetLayerCcwBindingResponse result =
         cormoran_rsr_SetLayerCcwBindingResponse_init_zero;
@@ -239,5 +276,50 @@ static int handle_get_sensors(const cormoran_rsr_GetSensorsRequest *req,
 
     resp->which_response_type = cormoran_rsr_Response_get_sensors_tag;
     resp->response_type.get_sensors = result;
+    return 0;
+}
+
+static int handle_save_all_settings(const cormoran_rsr_SaveAllSettingsRequest *req,
+                                    cormoran_rsr_Response *resp) {
+    ARG_UNUSED(req);
+    int rc = zmk_runtime_sensor_rotate_save_all();
+    if (rc != 0) {
+        LOG_ERR("Failed to save all runtime sensor rotate settings: %d", rc);
+        return rc;
+    }
+
+    resp->which_response_type = cormoran_rsr_Response_save_all_settings_tag;
+    resp->response_type.save_all_settings =
+        (cormoran_rsr_SaveAllSettingsResponse)cormoran_rsr_SaveAllSettingsResponse_init_zero;
+    return 0;
+}
+
+static int handle_discard_all_settings(const cormoran_rsr_DiscardAllSettingsRequest *req,
+                                       cormoran_rsr_Response *resp) {
+    ARG_UNUSED(req);
+    int rc = zmk_runtime_sensor_rotate_discard_all();
+    if (rc != 0) {
+        LOG_ERR("Failed to discard all runtime sensor rotate settings: %d", rc);
+        return rc;
+    }
+
+    resp->which_response_type = cormoran_rsr_Response_discard_all_settings_tag;
+    resp->response_type.discard_all_settings =
+        (cormoran_rsr_DiscardAllSettingsResponse)cormoran_rsr_DiscardAllSettingsResponse_init_zero;
+    return 0;
+}
+
+static int handle_reset_all_settings(const cormoran_rsr_ResetAllSettingsRequest *req,
+                                     cormoran_rsr_Response *resp) {
+    ARG_UNUSED(req);
+    int rc = zmk_runtime_sensor_rotate_reset_all();
+    if (rc != 0) {
+        LOG_ERR("Failed to reset all runtime sensor rotate settings: %d", rc);
+        return rc;
+    }
+
+    resp->which_response_type = cormoran_rsr_Response_reset_all_settings_tag;
+    resp->response_type.reset_all_settings =
+        (cormoran_rsr_ResetAllSettingsResponse)cormoran_rsr_ResetAllSettingsResponse_init_zero;
     return 0;
 }

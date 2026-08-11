@@ -113,12 +113,15 @@ In your `<keyboard>.keymap`, define a runtime sensor rotate behavior instance:
 
 3. **Configure bindings**:
    - Select the sensor index (0 or 1)
+   - Choose whether edits are persisted immediately or kept in memory only
    - Click "Load Configuration" to fetch current bindings
    - Select the layer you want to configure
    - Set clockwise and counter-clockwise bindings:
      - Select behavior from the dropdown (e.g., "kp" for key press)
      - Set param1 and param2 as needed
-   - Click "Save Bindings" to persist the configuration
+   - Click "Save Bindings" to apply the layer configuration using the selected storage mode
+   - Use "Save All" to flush memory-only edits to flash, "Discard All" to reload the
+     last saved values, or "Reset All" to erase overrides and restore devicetree defaults
 
 **Note:** Runtime bindings configured via Web UI override default bindings specified in device tree.
 

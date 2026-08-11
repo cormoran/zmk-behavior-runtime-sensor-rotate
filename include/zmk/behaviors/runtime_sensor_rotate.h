@@ -25,6 +25,12 @@ struct runtime_sensor_rotate_layer_bindings {
     struct runtime_sensor_rotate_binding ccw_binding;
 };
 
+enum zmk_runtime_sensor_rotate_write_mode {
+    ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_PERSIST = 0,
+    ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_MEMORY = 1,
+    ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_TEMPORARY = 2,
+};
+
 /**
  * Get the layer bindings for a specific sensor and layer
  */
@@ -37,6 +43,21 @@ int zmk_runtime_sensor_rotate_get_layer_bindings(
 int zmk_runtime_sensor_rotate_set_layer_bindings(
     uint8_t sensor_index, uint8_t layer,
     const struct runtime_sensor_rotate_layer_bindings *bindings);
+
+/** Set layer bindings using the requested custom-settings write mode. */
+int zmk_runtime_sensor_rotate_set_layer_bindings_with_mode(
+    uint8_t sensor_index, uint8_t layer,
+    const struct runtime_sensor_rotate_layer_bindings *bindings,
+    enum zmk_runtime_sensor_rotate_write_mode mode);
+
+/** Persist every binding's current in-memory value to flash. */
+int zmk_runtime_sensor_rotate_save_all(void);
+
+/** Discard unsaved binding changes and restore saved/default values. */
+int zmk_runtime_sensor_rotate_discard_all(void);
+
+/** Erase saved binding overrides and restore devicetree defaults. */
+int zmk_runtime_sensor_rotate_reset_all(void);
 
 /**
  * Get the layer bindings for a specific sensor and layer
