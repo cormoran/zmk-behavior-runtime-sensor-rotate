@@ -89,19 +89,24 @@ export function RuntimeSensorRotateConfig() {
         return;
       }
       const behaviorIds = res?.behaviors?.listAllBehaviors?.behaviors ?? [];
-      const behaviors = await Promise.all(
-        behaviorIds.map(async (b) => {
-          const detailRes = await call_rpc(conn, {
-            behaviors: {
-              getBehaviorDetails: {
-                behaviorId: b,
-              },
+      // The serial RPC transport processes one request at a time. Concurrent
+      // getBehaviorDetails calls can associate every response with the first
+      // requested behavior (typically &kp), so request them sequentially.
+      const behaviors: GetBehaviorDetailsResponse[] = [];
+      for (const behaviorId of behaviorIds) {
+        const detailRes = await call_rpc(conn, {
+          behaviors: {
+            getBehaviorDetails: {
+              behaviorId,
             },
-          });
-          return detailRes?.behaviors?.getBehaviorDetails;
-        })
-      );
-      setBehaviors(behaviors.filter((b) => b !== undefined));
+          },
+        });
+        const details = detailRes?.behaviors?.getBehaviorDetails;
+        if (details) {
+          behaviors.push(details);
+        }
+      }
+      setBehaviors(behaviors);
       setIsLoading(false);
     };
 
