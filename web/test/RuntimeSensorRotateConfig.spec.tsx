@@ -8,7 +8,7 @@ import {
   RuntimeSensorRotateConfig,
   SUBSYSTEM_IDENTIFIER,
 } from "../src/RuntimeSensorRotateConfig";
-import { Response } from "../src/proto/cormoran/rsr/custom";
+import { Request, Response, WriteMode } from "../src/proto/cormoran/rsr/custom";
 import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
 
 // Mock the ZMK client so we can control call_rpc responses directly: both
@@ -228,6 +228,123 @@ describe("RuntimeSensorRotateConfig Component", () => {
       await waitFor(() => {
         expect(screen.getByText(/Layer Configuration/i)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe("Storage controls", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const zmkClient = require("@zmkfirmware/zmk-studio-ts-client");
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it("sends memory-only writes and save/discard/reset requests", async () => {
+      const customRequests: Request[] = [];
+      zmkClient.call_rpc.mockImplementation(
+        (
+          _connection: unknown,
+          req: {
+            core?: { getLockState?: boolean };
+            custom?: { call?: { payload: Uint8Array } };
+            behaviors?: { listAllBehaviors?: boolean };
+          }
+        ) => {
+          if (req.core?.getLockState) {
+            return Promise.resolve({
+              core: {
+                getLockState: LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED,
+              },
+            });
+          }
+          if (req.behaviors?.listAllBehaviors) {
+            return Promise.resolve({
+              behaviors: { listAllBehaviors: { behaviors: [] } },
+            });
+          }
+          if (!req.custom?.call) {
+            return Promise.reject(new Error("unexpected call_rpc request"));
+          }
+
+          const request = Request.decode(req.custom.call.payload);
+          customRequests.push(request);
+          const response = request.getSensors
+            ? Response.create({ getSensors: { sensors: [] } })
+            : request.getAllLayerBindings
+              ? Response.create({
+                  getAllLayerBindings: {
+                    bindings: [{ layer: 0, cwBinding: {}, ccwBinding: {} }],
+                  },
+                })
+              : request.setLayerCwBinding
+                ? Response.create({ setLayerCwBinding: { success: true } })
+                : request.setLayerCcwBinding
+                  ? Response.create({
+                      setLayerCcwBinding: { success: true },
+                    })
+                  : request.saveAllSettings
+                    ? Response.create({ saveAllSettings: {} })
+                    : request.discardAllSettings
+                      ? Response.create({ discardAllSettings: {} })
+                      : Response.create({ resetAllSettings: {} });
+
+          return Promise.resolve({
+            custom: { call: { payload: Response.encode(response).finish() } },
+          });
+        }
+      );
+
+      const mockZMKApp = createConnectedMockZMKApp({
+        subsystems: [SUBSYSTEM_IDENTIFIER],
+      });
+      render(
+        <ZMKAppProvider value={mockZMKApp}>
+          <RuntimeSensorRotateConfig />
+        </ZMKAppProvider>
+      );
+
+      const user = userEvent.setup();
+      await waitFor(() => {
+        expect(screen.getByText(/Load Configuration/i)).not.toBeDisabled();
+      });
+      await user.click(screen.getByText(/Load Configuration/i));
+      await screen.findByText(/Layer Configuration/i);
+
+      await user.selectOptions(
+        screen.getByLabelText("Storage:"),
+        String(WriteMode.WRITE_MODE_MEMORY)
+      );
+      await user.click(screen.getByText("💾 Save Bindings"));
+
+      await waitFor(() => {
+        expect(
+          customRequests.filter(
+            (request) => request.setLayerCwBinding || request.setLayerCcwBinding
+          )
+        ).toHaveLength(2);
+      });
+      expect(
+        customRequests.find((request) => request.setLayerCwBinding)
+          ?.setLayerCwBinding?.writeMode
+      ).toBe(WriteMode.WRITE_MODE_MEMORY);
+      expect(
+        customRequests.find((request) => request.setLayerCcwBinding)
+          ?.setLayerCcwBinding?.writeMode
+      ).toBe(WriteMode.WRITE_MODE_MEMORY);
+
+      for (const [button, field] of [
+        ["💾 Save All", "saveAllSettings"],
+        ["↩️ Discard All", "discardAllSettings"],
+        ["🗑️ Reset All", "resetAllSettings"],
+      ] as const) {
+        await waitFor(() => {
+          expect(screen.getByText(button)).not.toBeDisabled();
+        });
+        await user.click(screen.getByText(button));
+        await waitFor(() => {
+          expect(customRequests.some((request) => request[field])).toBe(true);
+        });
+      }
     });
   });
 });

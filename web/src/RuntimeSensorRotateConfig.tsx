@@ -16,6 +16,7 @@ import {
   Binding,
   LayerBindings,
   SensorInfo,
+  WriteMode,
 } from "./proto/cormoran/rsr/custom";
 import { call_rpc } from "@zmkfirmware/zmk-studio-ts-client";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
@@ -29,6 +30,9 @@ export function RuntimeSensorRotateConfig() {
   const [selectedLayer, setSelectedLayer] = useState<number>(0);
   const [allLayerBindings, setAllLayerBindings] = useState<LayerBindings[]>([]);
   const [behaviors, setBehaviors] = useState<GetBehaviorDetailsResponse[]>([]);
+  const [writeMode, setWriteMode] = useState<WriteMode>(
+    WriteMode.WRITE_MODE_PERSIST
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +46,6 @@ export function RuntimeSensorRotateConfig() {
   const [awaitingUnlock, setAwaitingUnlock] = useState(false);
   const [pendingRetry, setPendingRetry] = useState<(() => void) | null>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const subsystem = useMemo(
     () => zmkApp?.findSubsystem(SUBSYSTEM_IDENTIFIER),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,6 +193,7 @@ export function RuntimeSensorRotateConfig() {
             sensorIndex: sensorIndex,
             layer: layer,
             binding: cwBinding,
+            writeMode,
           },
         });
 
@@ -224,7 +228,7 @@ export function RuntimeSensorRotateConfig() {
         setIsLoading(false);
       }
     },
-    [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+    [zmkApp, subsystem, sensorIndex, writeMode, loadAllLayerBindings]
   );
 
   const saveLayerCcwBindings = useCallback(
@@ -245,6 +249,7 @@ export function RuntimeSensorRotateConfig() {
             sensorIndex: sensorIndex,
             layer: layer,
             binding: ccwBinding,
+            writeMode,
           },
         });
 
@@ -279,7 +284,7 @@ export function RuntimeSensorRotateConfig() {
         setIsLoading(false);
       }
     },
-    [zmkApp?.state.connection, subsystem, sensorIndex, loadAllLayerBindings]
+    [zmkApp, subsystem, sensorIndex, writeMode, loadAllLayerBindings]
   );
 
   // Save bindings for a specific layer
@@ -291,6 +296,54 @@ export function RuntimeSensorRotateConfig() {
     [saveLayerCwBindings, saveLayerCcwBindings]
   );
 
+  async function applySettingsOperation(
+    operation: "save" | "discard" | "reset"
+  ) {
+    if (!zmkApp?.state.connection || !subsystem) return;
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const service = new ZMKCustomSubsystem(
+        zmkApp.state.connection,
+        subsystem.index
+      );
+      const request =
+        operation === "save"
+          ? Request.create({ saveAllSettings: {} })
+          : operation === "discard"
+            ? Request.create({ discardAllSettings: {} })
+            : Request.create({ resetAllSettings: {} });
+      const responsePayload = await service.callRPC(
+        Request.encode(request).finish()
+      );
+
+      if (responsePayload) {
+        const resp = Response.decode(responsePayload);
+        const succeeded =
+          (operation === "save" && resp.saveAllSettings !== undefined) ||
+          (operation === "discard" && resp.discardAllSettings !== undefined) ||
+          (operation === "reset" && resp.resetAllSettings !== undefined);
+        if (!succeeded && resp.error) {
+          setError(`Error: ${resp.error.message}`);
+          return;
+        }
+      }
+      await loadAllLayerBindings();
+    } catch (err) {
+      if (isUnlockRequiredError(err)) {
+        setAwaitingUnlock(true);
+        setPendingRetry(() => () => void applySettingsOperation(operation));
+        return;
+      }
+      setError(
+        `Failed to ${operation}: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   // Auto-retry once the device reports it's unlocked again -- covers the
   // common case where the user presses &studio_unlock after seeing the
   // prompt below without needing to click "Retry" themselves.
@@ -300,7 +353,6 @@ export function RuntimeSensorRotateConfig() {
       // than deriving from props/state, so a direct setState here is
       // intentional -- see react-hooks/set-state-in-effect's rationale (same
       // pattern used by useStudioLockState itself).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAwaitingUnlock(false);
       const retry = pendingRetry;
       setPendingRetry(null);
@@ -359,13 +411,53 @@ export function RuntimeSensorRotateConfig() {
         </select>
       </div>
 
-      <button
-        className="btn btn-primary"
-        disabled={isLoading || locked}
-        onClick={loadAllLayerBindings}
-      >
-        {isLoading ? "⏳ Loading..." : "📥 Load Configuration"}
-      </button>
+      <div className="input-group">
+        <label htmlFor="write-mode-select">Storage:</label>
+        <select
+          id="write-mode-select"
+          value={writeMode}
+          onChange={(e) => setWriteMode(Number(e.target.value) as WriteMode)}
+        >
+          <option value={WriteMode.WRITE_MODE_PERSIST}>Persist to flash</option>
+          <option value={WriteMode.WRITE_MODE_MEMORY}>
+            Memory only (until saved or rebooted)
+          </option>
+        </select>
+      </div>
+
+      <div className="button-group">
+        <button
+          className="btn btn-primary"
+          disabled={isLoading || locked}
+          onClick={loadAllLayerBindings}
+        >
+          {isLoading ? "⏳ Loading..." : "📥 Load Configuration"}
+        </button>
+        <button
+          className="btn btn-secondary"
+          disabled={isLoading || locked}
+          onClick={() => void applySettingsOperation("save")}
+          title="Persist all current in-memory bindings to flash"
+        >
+          💾 Save All
+        </button>
+        <button
+          className="btn btn-secondary"
+          disabled={isLoading || locked}
+          onClick={() => void applySettingsOperation("discard")}
+          title="Drop unsaved binding changes and reload saved values"
+        >
+          ↩️ Discard All
+        </button>
+        <button
+          className="btn btn-secondary"
+          disabled={isLoading || locked}
+          onClick={() => void applySettingsOperation("reset")}
+          title="Erase saved overrides and restore devicetree defaults"
+        >
+          🗑️ Reset All
+        </button>
+      </div>
 
       {error && (
         <div className="error-message">

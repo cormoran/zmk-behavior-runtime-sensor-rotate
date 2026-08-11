@@ -105,6 +105,18 @@ static inline uint32_t rsr_binding_index(uint8_t sensor_index, uint8_t layer) {
     return sensor_index * ZMK_RUNTIME_SENSOR_ROTATE_MAX_LAYERS + layer;
 }
 
+static enum zmk_custom_setting_write_mode
+rsr_write_mode(enum zmk_runtime_sensor_rotate_write_mode mode) {
+    switch (mode) {
+    case ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_MEMORY:
+        return ZMK_CUSTOM_SETTING_WRITE_MODE_MEMORY;
+    case ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_TEMPORARY:
+        return ZMK_CUSTOM_SETTING_WRITE_MODE_TEMPORARY;
+    default:
+        return ZMK_CUSTOM_SETTING_WRITE_MODE_PERSIST;
+    }
+}
+
 int zmk_runtime_sensor_rotate_get_layer_bindings(
     uint8_t sensor_index, uint8_t layer, struct runtime_sensor_rotate_layer_bindings *bindings) {
     return zmk_runtime_sensor_rotate_get_bindings(sensor_index, layer, bindings);
@@ -113,6 +125,14 @@ int zmk_runtime_sensor_rotate_get_layer_bindings(
 int zmk_runtime_sensor_rotate_set_layer_bindings(
     uint8_t sensor_index, uint8_t layer,
     const struct runtime_sensor_rotate_layer_bindings *bindings) {
+    return zmk_runtime_sensor_rotate_set_layer_bindings_with_mode(
+        sensor_index, layer, bindings, ZMK_RUNTIME_SENSOR_ROTATE_WRITE_MODE_PERSIST);
+}
+
+int zmk_runtime_sensor_rotate_set_layer_bindings_with_mode(
+    uint8_t sensor_index, uint8_t layer,
+    const struct runtime_sensor_rotate_layer_bindings *bindings,
+    enum zmk_runtime_sensor_rotate_write_mode mode) {
 
     if (sensor_index >= ZMK_RUNTIME_SENSOR_ROTATE_MAX_SENSORS) {
         return -EINVAL;
@@ -129,7 +149,7 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
 
     int rc = zmk_custom_setting_write_array_by_key(RSR_SUBSYS, RSR_BINDINGS_KEY,
                                                    rsr_binding_index(sensor_index, layer), &value,
-                                                   ZMK_CUSTOM_SETTING_WRITE_MODE_PERSIST);
+                                                   rsr_write_mode(mode));
     if (rc != 0) {
         LOG_ERR("Failed to save settings for sensor %d layer %d: %d", sensor_index, layer, rc);
         return rc;
@@ -138,6 +158,29 @@ int zmk_runtime_sensor_rotate_set_layer_bindings(
     LOG_DBG("Saved bindings (local_id=%d) for sensor %d layer %d",
             bindings->cw_binding.behavior_local_id, sensor_index, layer);
     return 0;
+}
+
+static const struct zmk_custom_setting *rsr_bindings_setting(void) {
+#if ZMK_KEYMAP_HAS_SENSORS
+    return zmk_custom_setting_find(RSR_SUBSYS, RSR_BINDINGS_KEY);
+#else
+    return NULL;
+#endif
+}
+
+int zmk_runtime_sensor_rotate_save_all(void) {
+    const struct zmk_custom_setting *setting = rsr_bindings_setting();
+    return setting ? zmk_custom_setting_save(setting) : 0;
+}
+
+int zmk_runtime_sensor_rotate_discard_all(void) {
+    const struct zmk_custom_setting *setting = rsr_bindings_setting();
+    return setting ? zmk_custom_setting_discard(setting) : 0;
+}
+
+int zmk_runtime_sensor_rotate_reset_all(void) {
+    const struct zmk_custom_setting *setting = rsr_bindings_setting();
+    return setting ? zmk_custom_setting_reset(setting) : 0;
 }
 
 int zmk_runtime_sensor_rotate_get_all_layer_bindings(

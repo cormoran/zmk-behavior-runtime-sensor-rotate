@@ -2,6 +2,14 @@ syntax = "proto3";
 
 package cormoran.rsr;
 
+// Where a Set* request stores the new value. PERSIST is value 0 so requests
+// from older clients keep the previous always-persist behavior.
+enum WriteMode {
+    WRITE_MODE_PERSIST = 0;
+    WRITE_MODE_MEMORY = 1;
+    WRITE_MODE_TEMPORARY = 2;
+}
+
 // Runtime sensor rotate messages
 message Binding {
     uint32 behavior_id = 1;
@@ -14,6 +22,7 @@ message SetLayerCwBindingRequest {
     uint32 sensor_index = 1;
     uint32 layer = 2;
     Binding binding = 3;
+    WriteMode write_mode = 4;
 }
 
 message SetLayerCwBindingResponse { bool success = 1; }
@@ -22,6 +31,7 @@ message SetLayerCcwBindingRequest {
     uint32 sensor_index = 1;
     uint32 layer = 2;
     Binding binding = 3;
+    WriteMode write_mode = 4;
 }
 
 message SetLayerCcwBindingResponse { bool success = 1; }
@@ -45,12 +55,30 @@ message SensorInfo {
 
 message GetSensorsResponse { repeated SensorInfo sensors = 1; }
 
+// Persist all current in-memory bindings to flash.
+message SaveAllSettingsRequest {}
+
+message SaveAllSettingsResponse {}
+
+// Drop unsaved changes and reload the last-saved bindings.
+message DiscardAllSettingsRequest {}
+
+message DiscardAllSettingsResponse {}
+
+// Reset all bindings to their devicetree defaults and erase saved overrides.
+message ResetAllSettingsRequest {}
+
+message ResetAllSettingsResponse {}
+
 message Request {
     oneof request_type {
         SetLayerCwBindingRequest set_layer_cw_binding = 1;
         SetLayerCcwBindingRequest set_layer_ccw_binding = 2;
         GetAllLayerBindingsRequest get_all_layer_bindings = 3;
         GetSensorsRequest get_sensors = 4;
+        SaveAllSettingsRequest save_all_settings = 5;
+        DiscardAllSettingsRequest discard_all_settings = 6;
+        ResetAllSettingsRequest reset_all_settings = 7;
     }
 }
 
@@ -63,5 +91,8 @@ message Response {
         SetLayerCcwBindingResponse set_layer_ccw_binding = 3;
         GetAllLayerBindingsResponse get_all_layer_bindings = 4;
         GetSensorsResponse get_sensors = 5;
+        SaveAllSettingsResponse save_all_settings = 6;
+        DiscardAllSettingsResponse discard_all_settings = 7;
+        ResetAllSettingsResponse reset_all_settings = 8;
     }
 }
